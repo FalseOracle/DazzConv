@@ -1,0 +1,1876 @@
+﻿@page "/downloads"
+@using System.IO
+@using System.Linq
+@using System.Text.Json
+@using ConverToDazz.Core.Services
+@using DazzConv.Services
+@using Microsoft.Maui.Storage
+@inject YtDlpService Downloader
+@inject IJSRuntime JSRuntime
+@inject LoggerService Logger
+@inject HotkeyService Hotkeys
+
+<h3>📥 Скачать видео и аудио</h3>
+
+<div class="alert alert-info">
+    <strong>Универсальный загрузчик</strong><br />
+    Поддерживает: YouTube, TikTok, Twitter/X, Reddit, Twitch, VK, OK.ru, Rutube, Dailymotion, Vimeo, Rumble, Bilibili, Patreon и 1800+ других сайтов
+</div>
+
+<style>
+
+    /* ===== 🌙 ТЁМНАЯ ТЕМА: Модальное окно деталей ===== */
+    body.dark-theme .details-modal {
+        background: #1e1e2e;
+        color: #e0e0e0;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    }
+
+        body.dark-theme .details-modal .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        }
+
+        body.dark-theme .details-modal .modal-footer {
+            background: #181825;
+            border-top: 1px solid #2a2a3e;
+        }
+
+        body.dark-theme .details-modal .details-title h6 {
+            color: #ffffff;
+        }
+
+        body.dark-theme .details-modal .details-title small {
+            color: #888;
+        }
+
+    /* Таблица деталей */
+    body.dark-theme .details-table {
+        border-color: #3a3a5a;
+        background: #252538;
+    }
+
+    body.dark-theme .detail-row {
+        border-bottom-color: #2a2a3e;
+    }
+
+        body.dark-theme .detail-row:last-child {
+            border-bottom: none;
+        }
+
+    body.dark-theme .detail-label {
+        color: #aaa;
+    }
+
+        body.dark-theme .detail-label i {
+            opacity: 0.9;
+        }
+
+    body.dark-theme .detail-value {
+        color: #e0e0e0;
+    }
+
+        body.dark-theme .detail-value a {
+            color: #7aa2f7;
+        }
+
+            body.dark-theme .detail-value a:hover {
+                color: #9bb8ff;
+            }
+
+        /* Кнопки копирования */
+        body.dark-theme .detail-value .btn-link {
+            color: #7aa2f7;
+        }
+
+        body.dark-theme .detail-value .btn-outline-secondary {
+            color: #aaa;
+            border-color: #3a3a5a;
+        }
+
+            body.dark-theme .detail-value .btn-outline-secondary:hover {
+                background: #2a2a3e;
+                color: #fff;
+            }
+
+    /* Футер */
+    body.dark-theme .modal-footer .btn-secondary {
+        background: #3a3a5a;
+        border-color: #3a3a5a;
+        color: #fff;
+    }
+
+        body.dark-theme .modal-footer .btn-secondary:hover {
+            background: #4a4a6a;
+        }
+
+    body.dark-theme .modal-footer .btn-outline-primary {
+        color: #7aa2f7;
+        border-color: #7aa2f7;
+    }
+
+        body.dark-theme .modal-footer .btn-outline-primary:hover {
+            background: rgba(122, 162, 247, 0.1);
+        }
+
+    body.dark-theme .modal-footer .btn-outline-secondary {
+        color: #aaa;
+        border-color: #3a3a5a;
+    }
+
+        body.dark-theme .modal-footer .btn-outline-secondary:hover {
+            background: #2a2a3e;
+            color: #fff;
+        }
+
+    /* Alert'ы внутри модалки */
+    body.dark-theme .details-modal .alert-warning {
+        background-color: #3d2f00 !important;
+        border-color: #6b5400 !important;
+        color: #ffd866 !important;
+    }
+
+        body.dark-theme .details-modal .alert-warning strong {
+            color: #ffd866 !important;
+        }
+
+    body.dark-theme .details-modal .alert-danger {
+        background-color: #2d1b1b !important;
+        border-color: #5c2828 !important;
+        color: #ff6b6b !important;
+    }
+
+        body.dark-theme .details-modal .alert-danger h6 {
+            color: #ff8787 !important;
+        }
+
+        body.dark-theme .details-modal .alert-danger small {
+            color: #ffaaaa !important;
+        }
+
+    /* Modal backdrop в тёмной теме */
+    body.dark-theme .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.75);
+    }
+
+    /* Scrollbar в модалке */
+    body.dark-theme .details-modal ::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    body.dark-theme .details-modal ::-webkit-scrollbar-track {
+        background: #1e1e2e;
+    }
+
+    body.dark-theme .details-modal ::-webkit-scrollbar-thumb {
+        background: #3a3a5a;
+        border-radius: 4px;
+    }
+
+        body.dark-theme .details-modal ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a6a;
+        }
+
+    /* 🆕 Стили модального окна деталей */
+    .details-modal {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+        .details-modal .modal-header {
+            border-bottom: none;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .details-modal .modal-body {
+            padding: 1.5rem;
+        }
+
+        .details-modal .details-title h6 {
+            word-break: break-word;
+        }
+
+    .details-table {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    body.dark-theme .details-table {
+        border-color: #3a3a5a;
+    }
+
+    .detail-row {
+        display: flex;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    body.dark-theme .detail-row {
+        border-bottom-color: #2a2a3e;
+    }
+
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        flex: 0 0 140px;
+        font-weight: 600;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    body.dark-theme .detail-label {
+        color: #aaa;
+    }
+
+    .detail-value {
+        flex: 1;
+        word-break: break-word;
+        min-width: 0;
+    }
+
+        .detail-value a {
+            word-break: break-all;
+            font-size: 0.9rem;
+        }
+
+    /* Анимация появления */
+    .modal.fade.show {
+        animation: modalFadeIn 0.2s ease-out;
+    }
+
+    @@keyframes modalFadeIn {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    .status-cell {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+        .status-cell .badge {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+        }
+
+    .actions-cell {
+        white-space: nowrap;
+        min-width: 100px;
+        text-align: right;
+    }
+
+        .actions-cell .btn-group {
+            display: inline-flex;
+        }
+
+    .row.g-3 .form-control,
+    .row.g-3 .btn {
+        height: calc(2.5rem + 2px);
+    }
+
+    .table td {
+        vertical-align: middle;
+    }
+
+    .btn-group .btn {
+        margin: 0 2px;
+    }
+
+    .progress-bar-animated {
+        animation: progress-bar-stripes 1s linear infinite;
+    }
+
+    @@keyframes progress-bar-stripes {
+        0% {
+            background-position-x: 1rem;
+        }
+    }
+
+    .file-name-cell {
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+        .file-name-cell strong {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    .cache-info {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    .blocked-sites-list {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 0.5rem;
+    }
+
+    body.dark-theme .alert-danger {
+        background-color: #842029 !important;
+        border-color: #b02a37 !important;
+        color: #ffffff !important;
+    }
+
+        body.dark-theme .alert-danger strong {
+            color: #ffffff !important;
+        }
+
+        body.dark-theme .alert-danger .bi {
+            color: #ffffff !important;
+        }
+
+    /* Также исправляем другие alert'ы в тёмной теме */
+    body.dark-theme .alert-info {
+        background-color: #055160 !important;
+        border-color: #087990 !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-theme .alert-success {
+        background-color: #0f5132 !important;
+        border-color: #198754 !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-theme .alert-warning {
+        background-color: #664d03 !important;
+        border-color: #ffca2c !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-theme .alert-secondary {
+        background-color: #495057 !important;
+        border-color: #6c757d !important;
+        color: #ffffff !important;
+    }
+
+</style>
+
+<!-- Настройки -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">⚙️ Настройки</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="mb-3">
+                    <label class="form-label">Папка загрузки:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" @bind="DownloadPath" readonly />
+                        <button class="btn btn-outline-secondary" @onclick="ChooseFolder">
+                            <i class="bi bi-folder2-open"></i> Выбрать
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label class="form-label">Тип контента:</label>
+                    <select class="form-select" value="@DownloadType" @onchange="OnTypeChanged">
+                        <option value="video">Видео</option>
+                        <option value="audio">Только аудио</option>
+                        <option value="custom">Выбрать формат</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        @if (DownloadType == "audio")
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Аудио формат:</label>
+                        <select class="form-select" @bind="AudioFormat">
+                            <option value="mp3">MP3 (совместимый)</option>
+                            <option value="flac">FLAC (без потерь)</option>
+                            <option value="aac">AAC (лучше MP3)</option>
+                            <option value="ogg">OGG Vorbis</option>
+                            <option value="opus">OPUS (современный)</option>
+                            <option value="wav">WAV (без сжатия)</option>
+                            <option value="m4a">M4A</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Битрейт: @AudioBitrate kbps</label>
+                        <select class="form-select" @bind="AudioBitrate">
+                            <option value="64">64 kbps (низкое)</option>
+                            <option value="128">128 kbps (среднее)</option>
+                            <option value="192">192 kbps (хорошее)</option>
+                            <option value="256">256 kbps (высокое)</option>
+                            <option value="320">320 kbps (лучшее)</option>
+                        </select>
+                        @if (AudioFormat == "flac" || AudioFormat == "wav")
+                        {
+                            <div class="form-text">Для FLAC/WAV битрейт не применяется (без потерь)</div>
+                        }
+                        else if (AudioFormat == "opus")
+                        {
+                            <div class="form-text">OPUS: 64-128 kbps достаточно для отличного качества</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (DownloadType == "video")
+        {
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Качество видео:</label>
+                        <select class="form-select" @bind="VideoQuality">
+                            <option value="best">Лучшее</option>
+                            <option value="2160">4K (2160p)</option>
+                            <option value="1440">2K (1440p)</option>
+                            <option value="1080">1080p (Full HD)</option>
+                            <option value="720">720p (HD)</option>
+                            <option value="480">480p (SD)</option>
+                            <option value="360">360p</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Видео формат (контейнер):</label>
+                        <select class="form-select" @bind="VideoContainer">
+                            <option value="mkv">MKV (универсальный)</option>
+                            <option value="mp4">MP4 (совместимый)</option>
+                            <option value="webm">WebM (современный)</option>
+                            <option value="avi">AVI (старый)</option>
+                        </select>
+                        <div class="form-text">MKV поддерживает все кодеки, MP4 более совместим</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Настройки прокси -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">🌐 Настройки прокси</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" @bind="UseProxy" @bind:after="SaveProxySettingsAsync" id="proxyCheck" />
+                    <label class="form-check-label" for="proxyCheck">Использовать прокси</label>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <input type="text"
+                       class="form-control @(UseProxy ? "" : "disabled")"
+                       @bind="ProxyAddress"
+                       @bind:after="OnProxyAddressChanged"
+                       placeholder="127.0.0.1:1080"
+                       disabled="@(!UseProxy)" />
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-outline-primary w-100"
+                        @onclick="TestProxyConnection"
+                        disabled="@(!UseProxy || IsTestingProxy)">
+                    @if (IsTestingProxy)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <text>Проверка...</text>
+                    }
+                    else
+                    {
+                        <i class="bi bi-wifi"></i>
+                        <text> Проверить подключение</text>
+                    }
+                </button>
+            </div>
+            <div class="col-md-2">
+                @if (ProxyTestResult.HasValue)
+                {
+                    <div class="alert @(ProxyTestResult.Value ? "alert-success" : "alert-danger") mb-0 py-2 text-center">
+                        <i class="bi bi-@(ProxyTestResult.Value ? "check-circle" : "x-circle")"></i>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- URL -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Ссылка (URL):</label>
+            <input type="text" class="form-control" @bind="UrlInput"
+                   placeholder="https://youtube.com/watch?v=... или https://tiktok.com/..." />
+            <div class="form-text">Поддерживаются ссылки на видео, плейлисты, каналы, альбомы</div>
+            @if (!string.IsNullOrEmpty(_blockedSiteWarning))
+            {
+                <div class="alert alert-danger mt-2 mb-0 py-2">
+                    <i class="bi bi-shield-x me-2"></i>
+                    <strong>@_blockedSiteWarning</strong>
+                </div>
+            }
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" @bind="IsPlaylist" />
+                <label class="form-check-label">Это плейлист/альбом (скачать всё)</label>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-lg" @onclick="StartDownload" disabled="@(IsDownloading || IsCancelling)">
+                @if (IsCancelling)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <text>Отмена...</text>
+                }
+                else
+                {
+                    <i class="bi bi-download me-2"></i>
+                    <text>@(IsDownloading ? "Загрузка..." : "Скачать")</text>
+                }
+            </button>
+            <button class="btn btn-danger btn-lg" @onclick="CancelDownload" disabled="@(!IsDownloading || IsCancelling)">
+                <i class="bi bi-x-circle"></i> Отмена
+            </button>
+        </div>
+
+        @if (IsDownloading && CurrentDownload != null)
+        {
+            <div class="alert alert-info mt-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong>🔄 Загрузка:</strong>
+                    <span>@CurrentDownload.Status</span>
+                </div>
+                <div class="progress" style="height: 25px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         style="width: @CurrentDownload.Progress%">
+                        @CurrentDownload.Progress%
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(DownloadProgressText))
+                {
+                    <small class="text-muted mt-2 d-block">@DownloadProgressText</small>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Доступные форматы -->
+@if (AvailableFormats.Any())
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">📋 Доступные форматы</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Разрешение</th>
+                            <th>Расширение</th>
+                            <th>Видео кодек</th>
+                            <th>Аудио кодек</th>
+                            <th>Размер</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var format in AvailableFormats.OrderByDescending(f => f.Filesize ?? 0))
+                        {
+                            <tr style="cursor: pointer" @onclick="() => SelectFormat(format.FormatId)">
+                                <td>@format.FormatId</td>
+                                <td>@format.Resolution</td>
+                                <td>@format.Extension</td>
+                                <td>@format.Vcodec</td>
+                                <td>@format.Acodec</td>
+                                <td>@FormatFileSize(format.Filesize ?? 0)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Текущая загрузка -->
+@if (CurrentDownload != null && !IsDownloading)
+{
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">🔄 Последняя загрузка</h5>
+        </div>
+        <div class="card-body">
+            <h6>@CurrentDownload.Title</h6>
+            <p class="text-muted">@CurrentDownload.Status</p>
+            <div class="progress" style="height: 30px;">
+                <div class="progress-bar progress-bar-striped @(CurrentDownload.Progress >= 100 ? "" : "progress-bar-animated")"
+                     role="progressbar"
+                     style="width: @CurrentDownload.Progress%">
+                    @CurrentDownload.Progress%
+                </div>
+            </div>
+        </div>
+    </div>
+}
+<!-- 🆕 МОДАЛЬНОЕ ОКНО ДЕТАЛЕЙ ЗАГРУЗКИ -->
+@if (_showDetailsModal && _selectedItem != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content details-modal">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-info-circle me-2"></i>Детали загрузки
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDetailsModal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Заголовок -->
+                    <div class="details-title mb-3">
+                        <h6 class="fw-bold mb-1">@_selectedItem.Title</h6>
+                        <small class="text-muted">ID: @(_selectedItem.GetHashCode().ToString("X8"))</small>
+                    </div>
+
+                    <!-- Таблица деталей -->
+                    <div class="details-table">
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-link-45deg text-primary"></i> Ссылка
+                            </div>
+                            <div class="detail-value">
+                                <a href="@_selectedItem.Url" target="_blank" class="text-break">
+                                    @_selectedItem.Url
+                                </a>
+                                <button class="btn btn-sm btn-link p-0 ms-2"
+                                        @onclick="() => CopyToClipboard(_selectedItem.Url)"
+                                        title="Скопировать">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-flag text-success"></i> Статус
+                            </div>
+                            <div class="detail-value">
+                                @if (_selectedItem.Progress >= 100)
+                                {
+                                    <span class="badge bg-success">✅ Завершено</span>
+                                }
+                                else if (_selectedItem.Progress > 0)
+                                {
+                                    <span class="badge bg-warning text-dark">⏳ @_selectedItem.Progress%</span>
+                                }
+                                else if (_selectedItem.Status.Contains("❌"))
+                                {
+                                    <span class="badge bg-danger">❌ Ошибка</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">@_selectedItem.Status</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-calendar text-info"></i> Добавлено
+                            </div>
+                            <div class="detail-value">
+                                @_selectedItem.AddedTime.ToString("dd.MM.yyyy HH:mm:ss")
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_selectedItem.FilePath))
+                        {
+                            <div class="detail-row">
+                                <div class="detail-label">
+                                    <i class="bi bi-folder text-warning"></i> Путь
+                                </div>
+                                <div class="detail-value">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <span class="text-break flex-grow-1" title="@_selectedItem.FilePath">
+                                            @_selectedItem.FilePath
+                                        </span>
+                                        <button class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                                                @onclick="() => CopyToClipboard(_selectedItem.FilePath)"
+                                                title="Скопировать путь">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="detail-row">
+                                <div class="detail-label">
+                                    <i class="bi bi-hdd text-secondary"></i> Размер
+                                </div>
+                                <div class="detail-value">
+                                    @FormatFileSize(_selectedItem.FileSize)
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(_selectedItem.Format))
+                            {
+                                <div class="detail-row">
+                                    <div class="detail-label">
+                                        <i class="bi bi-file-earmark text-info"></i> Формат
+                                    </div>
+                                    <div class="detail-value">
+                                        <span class="badge bg-info text-dark">@_selectedItem.Format</span>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="detail-row">
+                                <div class="detail-label">
+                                    <i class="bi bi-check-circle text-success"></i> Файл существует
+                                </div>
+                                <div class="detail-value">
+                                    @if (File.Exists(_selectedItem.FilePath))
+                                    {
+                                        <span class="badge bg-success">✅ Да</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">❌ Нет</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mb-0 mt-3">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>Файл не найден.</strong> Проверьте папку загрузок.
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @if (!string.IsNullOrEmpty(_selectedItem.FilePath))
+                    {
+                        <button class="btn btn-success" @onclick="() => OpenFile(_selectedItem.FilePath)">
+                            <i class="bi bi-folder2-open me-1"></i> Открыть папку
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="() => CopyToClipboard(_selectedItem.FilePath)">
+                            <i class="bi bi-clipboard me-1"></i> Копировать путь
+                        </button>
+                    }
+                    <button class="btn btn-outline-secondary" @onclick="() => CopyToClipboard(_selectedItem.Url)">
+                        <i class="bi bi-link-45deg me-1"></i> Копировать URL
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CloseDetailsModal">
+                        <i class="bi bi-x-lg me-1"></i> Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ✅ ИСТОРИЯ ЗАГРУЗОК (ВНЕ модального окна!) -->
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">📋 История загрузок (@Downloader.DownloadHistory.Count)</h5>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-warning" @onclick="ClearCache" title="Удалить временные файлы yt-dlp">
+                <i class="bi bi-trash3"></i> Очистить кэш (@CacheSize)
+            </button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="ClearHistory">
+                <i class="bi bi-trash"></i> Очистить историю
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (Downloader.DownloadHistory.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 35%;">Название</th>
+                            <th style="width: 20%;">Статус</th>
+                            <th style="width: 12%;">Прогресс</th>
+                            <th style="width: 8%;">Размер</th>
+                            <th style="width: 25%;" class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Downloader.DownloadHistory.OrderByDescending(i => i.AddedTime))
+                        {
+                            <tr>
+                                <td>
+                                    <div class="file-name-cell">
+                                        <strong title="@item.Title">@item.Title</strong>
+                                        <small class="text-muted" title="@item.Url">
+                                            @TruncateUrl(item.Url, 50)
+                                        </small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="status-cell" title="@item.Status">
+                                        @if (item.Progress >= 100 && string.IsNullOrEmpty(item.FilePath))
+                                        {
+                                            <span class="badge bg-warning text-dark" title="Файл не найден">
+                                                ⚠️ Не найден
+                                            </span>
+                                        }
+                                        else if (item.Progress >= 100)
+                                        {
+                                            <span class="badge bg-success">✓ Готово</span>
+                                        }
+                                        else if (item.Progress > 0)
+                                        {
+                                            <span class="badge bg-warning text-dark">⏳ В процессе</span>
+                                        }
+                                        else if (item.Status.Contains("❌") || item.Status.Contains("ERROR"))
+                                        {
+                                            <span class="badge bg-danger" title="@item.Status">
+                                                ❌ Ошибка
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">@TruncateText(item.Status, 30)</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (item.Progress > 0 && item.Progress < 100)
+                                    {
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                 role="progressbar"
+                                                 style="width: @item.Progress%">
+                                                @item.Progress%
+                                            </div>
+                                        </div>
+                                    }
+                                    else if (item.Progress >= 100)
+                                    {
+                                        <span class="text-success">✓ 100%</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>@FormatFileSize(item.FileSize)</td>
+                                <td class="actions-cell">
+                                    <div class="btn-group" role="group">
+                                        @if (!string.IsNullOrEmpty(item.FilePath))
+                                        {
+                                            var pathExists = File.Exists(item.FilePath);
+                                            <button class="btn btn-sm @(pathExists ? "btn-outline-success" : "btn-outline-warning")"
+                                                    @onclick="() => OpenFile(item.FilePath)"
+                                                    title="@(pathExists ? "Открыть папку с выделенным файлом" : "Открыть папку (файл не найден)")">
+                                                <i class="bi bi-folder2-open"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary"
+                                                    @onclick="() => OpenFile(DownloadPath)"
+                                                    title="Открыть папку загрузок">
+                                                <i class="bi bi-folder2-open"></i>
+                                            </button>
+                                        }
+                                        <button class="btn btn-sm btn-outline-info"
+                                                @onclick="() => ShowStatusDetails(item)"
+                                                title="Показать детали">
+                                            <i class="bi bi-info-circle"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => RemoveFromHistory(item)"
+                                                title="Удалить из истории">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <p class="text-muted text-center py-4">История пуста</p>
+        }
+    </div>
+</div>
+
+@code {
+    private string UrlInput = "";
+    private string DownloadPath = "";
+    private string DownloadType = "video";
+    private string VideoQuality = "best";
+    private string SelectedFormatId = "";
+    private string AudioFormat = "mp3";
+    private int AudioBitrate = 320;
+    private string DownloadProgressText = "";
+    private bool IsPlaylist = false;
+    private bool IsDownloading = false;
+    private bool IsCancelling = false;
+    private string VideoContainer = "mkv";
+    private bool IsLoadingFormats = false;
+    private List<VideoFormat> AvailableFormats = new();
+    private DownloadItem? CurrentDownload;
+    private CancellationTokenSource? Cts;
+    private string CacheSize = "0 Б";
+    private string _blockedSiteWarning = "";
+    private bool _showDetailsModal = false;
+    private DownloadItem? _selectedItem = null;
+
+    private void ShowStatusDetails(DownloadItem item)
+    {
+        _selectedItem = item;
+        _showDetailsModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseDetailsModal()
+    {
+        _showDetailsModal = false;
+        _selectedItem = null;
+        StateHasChanged();
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            await ShowToast("📋 Скопировано в буфер обмена", ToastType.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Ошибка копирования: {ex.Message}");
+            await ShowToast("❌ Не удалось скопировать", ToastType.Error);
+        }
+    }
+
+
+
+    // ===== СПИСОК ЗАПРЕЩЁННЫХ САЙТОВ (DRM-защита) =====
+    private static readonly Dictionary<string, string> BlockedSites = new(StringComparer.OrdinalIgnoreCase)
+    {
+         // === МУЗЫКАЛЬНЫЕ СЕРВИСЫ С DRM ===
+    { "spotify.com", "Spotify использует DRM-защиту и не может быть скачан" },
+    { "deezer.com", "Deezer использует DRM-защиту" },
+    { "tidal.com", "Tidal использует DRM-защиту" },
+    { "music.yandex.ru", "Яндекс.Музыка использует DRM-защиту" },
+    { "music.youtube.com", "YouTube Music защищён DRM" },
+    { "pandora.com", "Pandora использует DRM-защиту" },
+
+    // === ВИДЕОСТРИМИНГИ С DRM ===
+    { "netflix.com", "Netflix использует DRM-защиту" },
+    { "disneyplus.com", "Disney+ использует DRM-защиту" },
+    { "plus.disney.com", "Disney+ использует DRM-защиту" },
+    { "amazon.com", "Amazon Prime Video использует DRM-защиту" },
+    { "primevideo.com", "Amazon Prime Video использует DRM-защиту" },
+    { "hulu.com", "Hulu использует DRM-защиту" },
+    { "hbomax.com", "HBO Max использует DRM-защиту" },
+    { "max.com", "Max (HBO) использует DRM-защиту" },
+    { "peacocktv.com", "Peacock использует DRM-защиту" },
+    { "paramountplus.com", "Paramount+ использует DRM-защиту" },
+    { "appletv.com", "Apple TV+ использует DRM-защиту" },
+    { "tv.apple.com", "Apple TV+ использует DRM-защиту" },
+
+    // === РОССИЙСКИЕ СТРИМИНГИ С DRM ===
+    { "kion.ru", "KION использует DRM-защиту" },
+    { "more.tv", "More.tv использует DRM-защиту" },
+    { "start.ru", "Start использует DRM-защиту" },
+    { "premier.one", "Premier использует DRM-защиту" },
+    { "wink.ru", "Wink использует DRM-защиту" },
+    { "ntvplus.ru", "НТВ+ использует DRM-защиту" },
+    { "okko.tv", "OKKO использует DRM-защиту" },
+
+        // Аниме с DRM
+        { "crunchyroll.com", "Crunchyroll использует DRM-защиту на части контента" },
+
+        // Другие
+        { "pandora.com", "Pandora использует DRM-защиту" },
+        { "soundcloud.com", "SoundCloud частично защищён DRM" },
+    };
+
+
+
+    // Прокси настройки
+    private bool UseProxy = false;
+    private string ProxyAddress = "127.0.0.1:1080";
+    private bool IsTestingProxy = false;
+    private bool? ProxyTestResult = null;
+
+    private string TruncateText(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        if (text.Length <= maxLength) return text;
+        return text.Substring(0, maxLength - 3) + "...";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        DownloadPath = Downloader.DownloadPath;
+        await LoadProxySettingsAsync();
+        await LoadStateAsync();
+        await UpdateCacheSizeAsync();
+    }
+
+    private string GetFinalFilePath(string originalPath) => originalPath ?? "";
+
+    private string GetDisplayFileName(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return "Неизвестный файл";
+        try { return Path.GetFileName(filePath); }
+        catch { return filePath; }
+    }
+
+    private string TruncateUrl(string url, int maxLength)
+    {
+        if (string.IsNullOrEmpty(url)) return "";
+        if (url.Length <= maxLength) return url;
+        return url.Substring(0, maxLength - 3) + "...";
+    }
+
+    // ===== ПРОВЕРКА ЗАПРЕЩЁННЫХ САЙТОВ =====
+    private bool IsUrlBlocked(string url, out string reason)
+    {
+        reason = "";
+        if (string.IsNullOrWhiteSpace(url)) return false;
+
+        try
+        {
+            var uri = new Uri(url.StartsWith("http") ? url : "https://" + url);
+            var host = uri.Host.ToLowerInvariant();
+
+            // Убираем www.
+            if (host.StartsWith("www."))
+                host = host.Substring(4);
+
+            foreach (var blocked in BlockedSites)
+            {
+                var blockedDomain = blocked.Key.ToLowerInvariant();
+
+                // Проверяем точное совпадение или поддомен
+                if (host == blockedDomain || host.EndsWith("." + blockedDomain))
+                {
+                    reason = blocked.Value;
+                    Logger.LogWarning($"Downloads: заблокирован домен {host} - {reason}");
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Downloads: ошибка парсинга URL '{url}': {ex.Message}");
+        }
+
+        return false;
+    }
+
+    private void OpenFile(string filePath)
+    {
+        Logger.LogInfo($"========== НАЧАЛО OpenFile ==========");
+        Logger.LogInfo($"Получен путь: [{filePath}]");
+
+        if (string.IsNullOrEmpty(filePath))
+        {
+            _ = ShowToast("⚠️ Путь к файлу пустой", ToastType.Warning);
+            return;
+        }
+
+        bool fileExists = File.Exists(filePath);
+        Logger.LogInfo($"File.Exists = {fileExists}");
+
+        if (!fileExists)
+        {
+            Logger.LogWarning($"Файл НЕ существует: {filePath}");
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = dir,
+                        UseShellExecute = true
+                    });
+                    _ = ShowToast("⚠️ Файл не найден, открыта папка", ToastType.Warning);
+                }
+                catch (Exception ex)
+                {
+                    _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+                }
+            }
+            else
+            {
+                _ = ShowToast("⚠️ Файл и папка не найдены", ToastType.Warning);
+            }
+            return;
+        }
+
+        try
+        {
+            var normalizedPath = Path.GetFullPath(filePath).Replace('/', '\\');
+            var arguments = "/select,\"" + normalizedPath + "\"";
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = arguments,
+                UseShellExecute = true
+            };
+
+            System.Diagnostics.Process.Start(psi);
+            Logger.LogInfo($"Команда выполнена");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Ошибка открытия папки: {ex.Message}");
+            _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private async Task ClearCache()
+    {
+        try
+        {
+            var deletedCount = 0;
+            var deletedSize = 0L;
+
+            var foldersToClean = new List<string>
+        {
+            Path.GetTempPath(),
+            DownloadPath
+        };
+
+            var tempExtensions = new[] { ".part", ".ytdl", ".part.tmp", ".temp" };
+            var tempPatterns = new[] { "*.part", "*.ytdl", "*.part.tmp", "*.temp", "*.fvideo*", "*.faudio*" };
+
+            foreach (var folder in foldersToClean)
+            {
+                if (!Directory.Exists(folder)) continue;
+
+                try
+                {
+                    // Удаляем файлы по расширениям
+                    foreach (var ext in tempExtensions)
+                    {
+                        foreach (var file in Directory.GetFiles(folder, "*" + ext, SearchOption.TopDirectoryOnly))
+                        {
+                            try
+                            {
+                                var fileInfo = new FileInfo(file);
+                                deletedSize += fileInfo.Length;
+                                fileInfo.Delete();
+                                deletedCount++;
+                            }
+                            catch { }
+                        }
+                    }
+
+                    // Удаляем файлы по паттернам
+                    foreach (var pattern in tempPatterns)
+                    {
+                        foreach (var file in Directory.GetFiles(folder, pattern, SearchOption.TopDirectoryOnly))
+                        {
+                            try
+                            {
+                                var fileInfo = new FileInfo(file);
+                                deletedSize += fileInfo.Length;
+                                fileInfo.Delete();
+                                deletedCount++;
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // НОВОЕ: Чистим временные файлы ImageMagick
+            var tempPath = Path.GetTempPath();
+            if (Directory.Exists(tempPath))
+            {
+                try
+                {
+                    // ImageMagick создаёт файлы с префиксом "magick-"
+                    foreach (var file in Directory.GetFiles(tempPath, "magick-*", SearchOption.TopDirectoryOnly))
+                    {
+                        try
+                        {
+                            var fileInfo = new FileInfo(file);
+                            // Удаляем только файлы старше 1 часа (чтобы не мешать текущей работе)
+                            if (fileInfo.LastWriteTime < DateTime.Now.AddHours(-1))
+                            {
+                                deletedSize += fileInfo.Length;
+                                fileInfo.Delete();
+                                deletedCount++;
+                                Logger.LogInfo($"Кэш: удалён файл ImageMagick {file} ({FormatFileSize(fileInfo.Length)})");
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"Кэш: ошибка очистки ImageMagick: {ex.Message}");
+                }
+            }
+
+            // Чистим DazzConv_Preview
+            var previewFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Preview");
+            if (Directory.Exists(previewFolder))
+            {
+                try
+                {
+                    foreach (var file in Directory.GetFiles(previewFolder))
+                    {
+                        try
+                        {
+                            var fileInfo = new FileInfo(file);
+                            deletedSize += fileInfo.Length;
+                            fileInfo.Delete();
+                            deletedCount++;
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+
+            // НОВОЕ: Чистим DazzConv_Batch (временные файлы пакетной конвертации)
+            var batchFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Batch");
+            if (Directory.Exists(batchFolder))
+            {
+                try
+                {
+                    foreach (var file in Directory.GetFiles(batchFolder))
+                    {
+                        try
+                        {
+                            var fileInfo = new FileInfo(file);
+                            deletedSize += fileInfo.Length;
+                            fileInfo.Delete();
+                            deletedCount++;
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+
+            await UpdateCacheSizeAsync();
+
+            if (deletedCount > 0)
+            {
+                Logger.LogInfo($"Кэш: удалено {deletedCount} файлов, освобождено {FormatFileSize(deletedSize)}");
+                await ShowToast($"✅ Удалено {deletedCount} временных файлов\nОсвобождено: {FormatFileSize(deletedSize)}", ToastType.Success);
+            }
+            else
+            {
+                await ShowToast("ℹ️ Временных файлов не найдено", ToastType.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Кэш: ошибка очистки", ex);
+            await ShowToast($"❌ Ошибка очистки кэша: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private async Task UpdateCacheSizeAsync()
+    {
+        try
+        {
+            var totalSize = 0L;
+            var tempExtensions = new[] { ".part", ".ytdl", ".part.tmp", ".temp" };
+
+            if (!string.IsNullOrEmpty(DownloadPath) && Directory.Exists(DownloadPath))
+            {
+                foreach (var ext in tempExtensions)
+                {
+                    foreach (var file in Directory.GetFiles(DownloadPath, "*" + ext, SearchOption.TopDirectoryOnly))
+                    {
+                        try { totalSize += new FileInfo(file).Length; } catch { }
+                    }
+                }
+            }
+
+            var tempPath = Path.GetTempPath();
+            if (Directory.Exists(tempPath))
+            {
+                // Временные файлы yt-dlp
+                foreach (var ext in tempExtensions)
+                {
+                    foreach (var file in Directory.GetFiles(tempPath, "*" + ext, SearchOption.TopDirectoryOnly))
+                    {
+                        try { totalSize += new FileInfo(file).Length; } catch { }
+                    }
+                }
+
+                // НОВОЕ: Файлы ImageMagick
+                foreach (var file in Directory.GetFiles(tempPath, "magick-*", SearchOption.TopDirectoryOnly))
+                {
+                    try { totalSize += new FileInfo(file).Length; } catch { }
+                }
+            }
+
+            // DazzConv_Preview
+            var previewFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Preview");
+            if (Directory.Exists(previewFolder))
+            {
+                foreach (var file in Directory.GetFiles(previewFolder))
+                {
+                    try { totalSize += new FileInfo(file).Length; } catch { }
+                }
+            }
+
+            // НОВОЕ: DazzConv_Batch
+            var batchFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Batch");
+            if (Directory.Exists(batchFolder))
+            {
+                foreach (var file in Directory.GetFiles(batchFolder))
+                {
+                    try { totalSize += new FileInfo(file).Length; } catch { }
+                }
+            }
+
+            CacheSize = FormatFileSize(totalSize);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            CacheSize = "0 Б";
+        }
+    }
+
+    private async Task OnProxyAddressChanged() => await SaveProxySettingsAsync();
+
+    private async Task LoadProxySettingsAsync()
+    {
+        try
+        {
+            var json = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dazzconv_proxy_settings");
+            if (!string.IsNullOrEmpty(json))
+            {
+                var settings = System.Text.Json.JsonSerializer.Deserialize<ProxySettings>(json);
+                if (settings != null)
+                {
+                    UseProxy = settings.UseProxy;
+                    ProxyAddress = settings.ProxyAddress ?? "127.0.0.1:1080";
+                }
+            }
+        }
+        catch { }
+    }
+
+    private class ProxySettings
+    {
+        public bool UseProxy { get; set; }
+        public string? ProxyAddress { get; set; }
+    }
+
+    private async Task SaveProxySettingsAsync()
+    {
+        try
+        {
+            var settings = new { UseProxy, ProxyAddress };
+            var json = System.Text.Json.JsonSerializer.Serialize(settings);
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dazzconv_proxy_settings", json);
+        }
+        catch { }
+    }
+
+    private async Task TestProxyConnection()
+    {
+        if (string.IsNullOrWhiteSpace(ProxyAddress))
+        {
+            await ShowToast("⚠️ Введите адрес прокси", ToastType.Warning);
+            return;
+        }
+
+        try
+        {
+            IsTestingProxy = true;
+            ProxyTestResult = null;
+            StateHasChanged();
+
+            var proxyUrl = FormatProxyUrl(ProxyAddress);
+            Downloader.SetProxy(proxyUrl);
+
+            var testUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+            var success = await Downloader.TestConnectionAsync(testUrl, CancellationToken.None);
+
+            ProxyTestResult = success;
+        }
+        catch (Exception ex)
+        {
+            ProxyTestResult = false;
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+        finally
+        {
+            IsTestingProxy = false;
+            StateHasChanged();
+        }
+    }
+
+    private string FormatProxyUrl(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address)) return "";
+
+        address = address.Trim();
+
+        // Если уже указан протокол — возвращаем как есть
+        if (address.StartsWith("http://") ||
+            address.StartsWith("https://") ||
+            address.StartsWith("socks5://") ||
+            address.StartsWith("socks4://") ||
+            address.StartsWith("socks5h://"))
+        {
+            return address;
+        }
+
+        // Разделяем на хост и порт
+        var parts = address.Split(':');
+
+        if (parts.Length == 2)
+        {
+            var host = parts[0];
+            var port = parts[1];
+
+            // Определяем тип прокси по порту
+            if (port == "1080" || port == "9050" || port == "9150")
+            {
+                // SOCKS5
+                return $"socks5://{host}:{port}";
+            }
+            else if (port == "8080" || port == "3128" || port == "8888" || port == "80")
+            {
+                // HTTP
+                return $"http://{host}:{port}";
+            }
+            else if (port == "443")
+            {
+                // HTTPS
+                return $"https://{host}:{port}";
+            }
+            else
+            {
+                // По умолчанию — SOCKS5
+                return $"socks5://{host}:{port}";
+            }
+        }
+
+        // Если нет порта — добавляем стандартный
+        // Проверяем, похоже ли на домен/IP
+        if (address.Contains(".") || address == "localhost")
+        {
+            return $"socks5://{address}:1080";
+        }
+
+        return $"socks5://{address}:1080";
+    }
+
+    private void OnTypeChanged(ChangeEventArgs e)
+    {
+        DownloadType = e.Value?.ToString() ?? "video";
+        AvailableFormats.Clear();
+        _ = SaveStateAsync();
+        StateHasChanged();
+    }
+
+    private void SelectFormat(string formatId)
+    {
+        SelectedFormatId = formatId;
+        DownloadType = "custom";
+        StateHasChanged();
+    }
+
+    private async Task LoadFormats()
+    {
+        if (string.IsNullOrWhiteSpace(UrlInput))
+        {
+            await ShowToast("⚠️ Введите ссылку", ToastType.Warning);
+            return;
+        }
+
+        // Проверка запрещённых сайтов
+        if (IsUrlBlocked(UrlInput, out var blockReason))
+        {
+            await ShowToast($"🚫 {blockReason}", ToastType.Error);
+            return;
+        }
+
+        try
+        {
+            IsLoadingFormats = true;
+            DownloadProgressText = "🔍 Получение информации о видео...";
+            StateHasChanged();
+
+            AvailableFormats = await Downloader.GetAvailableFormatsAsync(UrlInput);
+
+            if (!AvailableFormats.Any())
+                await ShowToast("⚠️ Не удалось получить список форматов", ToastType.Warning);
+            else
+                await ShowToast($"✅ Найдено {AvailableFormats.Count} форматов", ToastType.Success);
+        }
+        catch (Exception ex)
+        {
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+        finally
+        {
+            IsLoadingFormats = false;
+            DownloadProgressText = "";
+            StateHasChanged();
+        }
+    }
+
+    // ===== ИСПРАВЛЕННЫЙ ВЫБОР ПАПКИ через Win32FolderPicker =====
+    private async Task ChooseFolder()
+    {
+        try
+        {
+#if WINDOWS
+            var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для загрузок");
+
+            if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+            {
+                DownloadPath = folder;
+                Downloader.SetDownloadPath(folder);
+                await UpdateCacheSizeAsync();
+                await ShowToast($"✅ Папка загрузки: {folder}", ToastType.Success);
+            }
+#else
+            var options = new PickOptions { PickerTitle = "Выберите любой файл, чтобы указать папку" };
+            var result = await FilePicker.Default.PickAsync(options);
+
+            if (result != null)
+            {
+                var folder = Path.GetDirectoryName(result.FullPath);
+                if (!string.IsNullOrEmpty(folder))
+                {
+                    DownloadPath = folder;
+                    Downloader.SetDownloadPath(folder);
+                    await UpdateCacheSizeAsync();
+                }
+            }
+#endif
+        }
+        catch (Exception ex)
+        {
+            await ShowToast($"Ошибка: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private async Task StartDownload()
+    {
+        if (string.IsNullOrWhiteSpace(UrlInput))
+        {
+            await ShowToast("⚠️ Введите ссылку", ToastType.Warning);
+            return;
+        }
+
+        // Проверка запрещённых сайтов
+        if (IsUrlBlocked(UrlInput, out var blockReason))
+        {
+            _blockedSiteWarning = blockReason;
+            await ShowToast($"🚫 {blockReason}", ToastType.Error);
+            StateHasChanged();
+            return;
+        }
+
+        _blockedSiteWarning = "";
+
+        if (UseProxy && !string.IsNullOrWhiteSpace(ProxyAddress))
+            Downloader.SetProxy(FormatProxyUrl(ProxyAddress));
+        else
+            Downloader.SetProxy(null);
+
+        try
+        {
+            IsDownloading = true;
+            IsCancelling = false;
+            Cts = new CancellationTokenSource();
+            DownloadProgressText = "Инициализация...";
+
+            string format;
+            bool isAudioOnly = false;
+
+            if (DownloadType == "audio")
+            {
+                format = "bestaudio";
+                isAudioOnly = true;
+            }
+            else if (DownloadType == "custom")
+            {
+                format = SelectedFormatId;
+            }
+            else
+            {
+                format = VideoQuality == "best"
+                    ? "best"
+                    : $"bestvideo[height<={VideoQuality}]+bestaudio/best[height<={VideoQuality}]";
+            }
+
+            var progress = new Progress<string>(line =>
+            {
+                DownloadProgressText = line;
+                InvokeAsync(StateHasChanged);
+            });
+
+            if (IsPlaylist)
+            {
+                var items = await Downloader.DownloadPlaylistAsync(
+                    UrlInput, format, isAudioOnly, token: Cts.Token);
+                await ShowToast($"✅ Загружено {items.Count} элементов", ToastType.Success);
+            }
+            else
+            {
+                CurrentDownload = await Downloader.DownloadAsync(
+                    UrlInput, format, isAudioOnly, null, progress, Cts.Token, AudioFormat, AudioBitrate);
+
+                if (CurrentDownload != null)
+                {
+                    // НОВОЕ: Перечитываем размер файла с диска (на случай если yt-dlp не сообщил)
+                    if (!string.IsNullOrEmpty(CurrentDownload.FilePath) && File.Exists(CurrentDownload.FilePath))
+                    {
+                        try
+                        {
+                            var fileInfo = new FileInfo(CurrentDownload.FilePath);
+                            CurrentDownload.FileSize = fileInfo.Length;
+                            Logger.LogInfo($"Downloads: размер файла обновлён: {CurrentDownload.FileSize} байт");
+                        }
+                        catch { }
+                    }
+
+                    // НОВОЕ: Если путь пустой, но файл появился в папке — ищем его
+                    if (string.IsNullOrEmpty(CurrentDownload.FilePath) && !string.IsNullOrEmpty(DownloadPath) && Directory.Exists(DownloadPath))
+                    {
+                        try
+                        {
+                            // Берём самый свежий файл в папке загрузок
+                            var latestFile = Directory.GetFiles(DownloadPath)
+                                .Select(f => new FileInfo(f))
+                                .Where(f => f.Length > 0 && f.LastWriteTime > DateTime.Now.AddMinutes(-5))
+                                .OrderByDescending(f => f.LastWriteTime)
+                                .FirstOrDefault();
+
+                            if (latestFile != null)
+                            {
+                                CurrentDownload.FilePath = latestFile.FullName;
+                                CurrentDownload.FileSize = latestFile.Length;
+                                Logger.LogInfo($"Downloads: найден последний файл: {latestFile.FullName}");
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (!string.IsNullOrEmpty(CurrentDownload.FilePath))
+                    {
+                        var fileName = Path.GetFileName(CurrentDownload.FilePath);
+                        await ShowToast($"✅ Загружено: {fileName}", ToastType.Success);
+                    }
+                    else
+                    {
+                        await ShowToast("⚠️ Загрузка завершена, но файл не найден. Проверьте папку загрузок.", ToastType.Warning);
+                    }
+                }
+
+                SaveDownloadHistory();
+                await UpdateCacheSizeAsync();
+            }
+
+            await UpdateCacheSizeAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            await ShowToast("⚠️ Загрузка отменена", ToastType.Warning);
+        }
+        catch (Exception ex)
+        {
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+        finally
+        {
+            IsDownloading = false;
+            IsCancelling = false;
+            CurrentDownload = null;
+            Cts?.Dispose();
+            Cts = null;
+            StateHasChanged();
+        }
+    }
+
+    private void SaveDownloadHistory()
+    {
+        try
+        {
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    // ===== ИСПРАВЛЕННАЯ ОТМЕНА — моментальная =====
+    private async Task CancelDownload()
+    {
+        if (!IsDownloading || IsCancelling) return;
+
+        try
+        {
+            IsCancelling = true;
+            StateHasChanged();
+
+            // 1. Отправляем сигнал отмены в CancellationToken
+            Cts?.Cancel();
+
+            // 2. Принудительно убиваем процесс yt-dlp
+            Downloader.CancelDownload();
+
+            await ShowToast("⚠️ Отмена загрузки...", ToastType.Warning);
+
+            // Даём процессу 2 секунды на завершение
+            await Task.Delay(2000);
+
+            // 3. Если всё ещё "висит" — принудительно сбрасываем состояние
+            if (IsDownloading)
+            {
+                IsDownloading = false;
+                IsCancelling = false;
+                Cts?.Dispose();
+                Cts = null;
+                StateHasChanged();
+                await ShowToast("⚠️ Загрузка принудительно остановлена", ToastType.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Ошибка отмены загрузки", ex);
+            IsDownloading = false;
+            IsCancelling = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearHistory()
+    {
+        Downloader.ClearHistory();
+        StateHasChanged();
+    }
+
+    private void RemoveFromHistory(DownloadItem item)
+    {
+        Downloader.RemoveFromHistory(item);
+        StateHasChanged();
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 Б";
+        const long kb = 1024, mb = kb * 1024, gb = mb * 1024;
+        if (bytes >= gb) return $"{(bytes / (double)gb):F2} ГБ";
+        if (bytes >= mb) return $"{(bytes / (double)mb):F2} МБ";
+        if (bytes >= kb) return $"{(bytes / (double)kb):F2} КБ";
+        return $"{bytes} Б";
+    }
+
+    private async Task ShowToast(string message, ToastType type = ToastType.Info)
+    {
+        try { await JSRuntime.InvokeVoidAsync("showToast", message, type.ToString().ToLower()); }
+        catch { await JSRuntime.InvokeVoidAsync("alert", message); }
+    }
+
+    private enum ToastType { Success, Error, Warning, Info }
+
+    private async Task SaveStateAsync()
+    {
+        try
+        {
+            var state = new { UrlInput, DownloadType, VideoQuality, AudioFormat, AudioBitrate, VideoContainer, IsPlaylist, SelectedFormatId };
+            var json = JsonSerializer.Serialize(state);
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dazzconv_download_state", json);
+        }
+        catch { }
+    }
+
+    private async Task LoadStateAsync()
+    {
+        try
+        {
+            var json = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dazzconv_download_state");
+            if (!string.IsNullOrEmpty(json))
+            {
+                var state = JsonSerializer.Deserialize<DownloadState>(json);
+                if (state != null)
+                {
+                    UrlInput = state.UrlInput ?? "";
+                    DownloadType = state.DownloadType ?? "video";
+                    VideoQuality = state.VideoQuality ?? "best";
+                    AudioFormat = state.AudioFormat ?? "mp3";
+                    AudioBitrate = state.AudioBitrate;
+                    VideoContainer = state.VideoContainer ?? "mkv";
+                    IsPlaylist = state.IsPlaylist;
+                    SelectedFormatId = state.SelectedFormatId ?? "";
+                }
+            }
+        }
+        catch { }
+    }
+
+    private class DownloadState
+    {
+        public string? UrlInput { get; set; }
+        public string? DownloadType { get; set; }
+        public string? VideoQuality { get; set; }
+        public string? AudioFormat { get; set; }
+        public int AudioBitrate { get; set; }
+        public string? VideoContainer { get; set; }
+        public bool IsPlaylist { get; set; }
+        public string? SelectedFormatId { get; set; }
+    }
+}

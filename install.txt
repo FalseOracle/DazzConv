@@ -1,0 +1,27 @@
+cd C:\Users\judgment\Documents\DazzConv
+
+# Очистка
+Remove-Item -Recurse -Force .\DazzConv\bin, .\DazzConv\obj -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .\ConverToDazz.Core\bin, .\ConverToDazz.Core\obj -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .\publish, .\releases -ErrorAction SilentlyContinue
+
+# Публикация (SelfContained уже в .csproj, но можно передать явно)
+dotnet publish .\DazzConv\DazzConv.csproj `
+  -c Release `
+  -f net8.0-windows10.0.19041.0 `
+  -r win-x64 `
+  --self-contained true `
+  -o .\publish
+
+# Очистка языков
+.\cleanup-languages.ps1
+
+# Упаковка
+vpk pack `
+  --packId "DazzConv" `
+  --packTitle "DazzConv" `
+  --packVersion "1.0.0" `
+  --packAuthors "FalseOracle" `
+  --mainExe "DazzConv.exe" `
+  --packDir ".\publish" `
+  --outputDir ".\releases"

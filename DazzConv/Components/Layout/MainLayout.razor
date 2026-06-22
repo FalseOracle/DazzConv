@@ -1,0 +1,204 @@
+﻿@inherits LayoutComponentBase
+@using DazzConv.Services
+@inject FFmpegPathService FFmpegService
+@inject LoggerService Logger
+
+<div class="app-container">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h3 class="brand">🎬 DazzConv</h3>
+        </div>
+        <nav class="sidebar-nav">
+            <NavLink class="nav-item" href="" Match="NavLinkMatch.All">
+                <i class="bi bi-house-door"></i>
+                <span>Главная</span>
+            </NavLink>
+            <NavLink class="nav-item" href="audio">
+                <i class="bi bi-music-note-beamed"></i>
+                <span>Аудио</span>
+            </NavLink>
+            <NavLink class="nav-item" href="image">
+                <i class="bi bi-image"></i>
+                <span>Изображения</span>
+            </NavLink>
+            <NavLink class="nav-item" href="video">
+                <i class="bi bi-camera-video"></i>
+                <span>Видео</span>
+            </NavLink>
+            <NavLink class="nav-item" href="downloads">
+                <i class="bi bi-cloud-download"></i>
+                <span>Скачать</span>
+            </NavLink>
+            <NavLink class="nav-item" href="batch">
+                <i class="bi bi-files"></i>
+                <span>Пакная конвертация</span>
+            </NavLink>
+            <NavLink class="nav-item" href="settings">
+                <i class="bi bi-gear"></i>
+                <span>Настройки</span>
+            </NavLink>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <h2 class="page-title">DazzConv</h2>
+            </div>
+            <div class="top-bar-right">
+                <button class="theme-toggle" @onclick="ToggleTheme">
+                    <i class="bi @(IsDarkTheme ? "bi-sun-fill" : "bi-moon-fill")"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="content-area">
+            @Body
+        </div>
+    </main>
+</div>
+
+@code {
+    private bool IsDarkTheme = false;
+
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var savedTheme = await JSRuntime.InvokeAsync<string>("eval", "localStorage.getItem('darkTheme')");
+            IsDarkTheme = savedTheme == "true";
+            if (IsDarkTheme)
+            {
+                await JSRuntime.InvokeVoidAsync("eval", "document.body.classList.add('dark-theme')");
+            }
+        }
+        catch { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CheckComponentsAsync();
+        }
+    }
+
+    private async Task CheckComponentsAsync()
+    {
+        try
+        {
+            var issues = new List<string>();
+            var basePath = AppDomain.CurrentDomain.BaseDirectory;
+
+            // Проверка FFmpeg
+            try
+            {
+                var ffmpegPath = FFmpegService.GetFFmpegPath();
+                if (!System.IO.File.Exists(ffmpegPath))
+                {
+                    issues.Add("❌ FFmpeg не найден");
+                    Logger.LogWarning($"FFmpeg не найден по пути: {ffmpegPath}");
+                }
+                else if (!await ValidateFFmpegAsync(ffmpegPath))
+                {
+                    issues.Add("❌ FFmpeg повреждён или не запускается");
+                    Logger.LogWarning("FFmpeg не проходит проверку запуска");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Ошибка проверки FFmpeg", ex);
+                issues.Add("❌ Ошибка проверки FFmpeg");
+            }
+
+            // Проверка yt-dlp
+            try
+            {
+                var ytDlpPaths = new[]
+                {
+                    System.IO.Path.Combine(basePath, "Resources", "Tools", "yt-dlp.exe"),
+                    System.IO.Path.Combine(basePath, "yt-dlp.exe")
+                };
+
+                bool ytDlpFound = ytDlpPaths.Any(System.IO.File.Exists);
+                if (!ytDlpFound)
+                {
+                    issues.Add("❌ yt-dlp не найден");
+                    Logger.LogWarning("yt-dlp не найден");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Ошибка проверки yt-dlp", ex);
+            }
+
+            // Проверка свободного места на системном диске
+            try
+            {
+                var systemDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory)!);
+                var freeSpaceGB = systemDrive.AvailableFreeSpace / (1024.0 * 1024 * 1024);
+
+                if (freeSpaceGB < 1)
+                {
+                    issues.Add($"⚠️ Критически мало места на диске: {freeSpaceGB:F2} ГБ");
+                }
+                else if (freeSpaceGB < 5)
+                {
+                    Logger.LogInfo($"Свободное место на диске: {freeSpaceGB:F2} ГБ");
+                }
+            }
+            catch { }
+
+            // Показ уведомлений
+            if (issues.Any())
+            {
+                var message = "⚠️ Обнаружены проблемы:\n\n" + string.Join("\n", issues);
+                await JSRuntime.InvokeVoidAsync("showToast", message, "warning");
+            }
+            else
+            {
+                Logger.LogInfo("Все компоненты найдены и работают корректно");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Ошибка проверки компонентов", ex);
+        }
+    }
+
+    private async Task<bool> ValidateFFmpegAsync(string ffmpegPath)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = "-version",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(psi);
+            if (process == null) return false;
+
+            var exited = await Task.Run(() => process.WaitForExit(5000));
+            return exited && process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        IsDarkTheme = !IsDarkTheme;
+        await JSRuntime.InvokeVoidAsync("eval",
+            IsDarkTheme ? "document.body.classList.add('dark-theme')" : "document.body.classList.remove('dark-theme')");
+        await JSRuntime.InvokeVoidAsync("eval", $"localStorage.setItem('darkTheme', '{IsDarkTheme.ToString().ToLower()}')");
+    }
+}

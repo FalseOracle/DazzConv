@@ -1,0 +1,2545 @@
+﻿@page "/batch"
+@using System.IO
+@using System.Linq
+@using ConverToDazz.Core.Services
+@using DazzConv.Services
+@using Microsoft.Maui.Storage
+@using Microsoft.JSInterop
+@inject ImageConverterService ImageService
+@inject AudioConverterService AudioService
+@inject FFmpegPathService FFmpegService
+@inject IJSRuntime JSRuntime
+@inject VideoConverterService VideoService
+@inject LoggerService Logger
+@inject HotkeyService Hotkeys
+
+<div class="batch-container">
+    <!-- Заголовок -->
+    <div class="batch-header mb-4">
+        <div class="d-flex align-items-center mb-3">
+            <div class="icon-wrapper me-3">
+                <i class="bi bi-layers-fill"></i>
+            </div>
+            <div>
+                <h2 class="mb-1">Мульти конвертация</h2>
+                <p class="mb-0 text-muted">Обработайте множество файлов одновременно</p>
+            </div>
+        </div>
+    </div>
+
+
+    <InputFile id="batchFileInput"
+               OnChange="OnMultipleFilesSelected"
+               multiple
+               accept="@GetAcceptTypes()"
+               style="position:fixed; top:-1000px; left:-1000px; width:1px; height:1px; opacity:0; pointer-events:none;" />
+
+    <!-- Основная панель -->
+    <div class="card modern-card mb-4">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h5 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Настройки</h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <!-- Тип файлов и папка вывода -->
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-3 mb-lg-0">
+                    <label class="form-label fw-semibold mb-2">
+                        <i class="bi bi-filetype-@BatchType me-2"></i>Тип файлов
+                    </label>
+                    <select class="form-select form-select-lg" value="@BatchType" @onchange="OnBatchTypeChanged">
+                        <option value="mixed">🌐 Смешанный (Аудио + Видео + Фото)</option>
+                        <option value="audio">🎵 Аудио файлы</option>
+                        <option value="image">🖼️ Изображения</option>
+                        <option value="video">🎬 Видео файлы</option>
+                    </select>
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label fw-semibold mb-2">
+                        <i class="bi bi-folder me-2"></i>Папка вывода
+                    </label>
+                    <div class="input-group input-group-lg">
+                        <input type="text"
+                               class="form-control @(!IsValidOutputPath && !string.IsNullOrWhiteSpace(OutputPath) ? "is-invalid" : "")"
+                               @bind="OutputPath"
+                               @bind:event="oninput"
+                               placeholder="Введите путь к папке или нажмите 'Обзор'..." />
+                        <button class="btn btn-outline-primary" @onclick="ChooseOutputFolder" title="Выбрать папку">
+                            <i class="bi bi-folder2-open"></i> Обзор
+                        </button>
+                    </div>
+                    @if (!IsValidOutputPath && !string.IsNullOrWhiteSpace(OutputPath))
+                    {
+                        <div class="invalid-feedback d-block">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Нельзя сохранять в системные папки!
+                        </div>
+                    }
+                    else if (string.IsNullOrWhiteSpace(OutputPath))
+                    {
+                        <div class="form-text mt-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            По умолчанию: @GetDefaultOutputPath()
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                        <button class="btn btn-primary btn-lg px-4" @onclick="TriggerFileInput" disabled="@IsLoadingFiles">
+                            <i class="bi bi-plus-circle me-2"></i>Добавить файлы
+                        </button>
+                        <button class="btn btn-outline-primary btn-lg px-4" @onclick="SelectFolder" disabled="@IsLoadingFiles">
+                            <i class="bi bi-folder-plus me-2"></i>Добавить папку
+                        </button>
+                        <div class="form-check ms-3">
+                            <input class="form-check-input" type="checkbox" @bind="IncludeSubfolders" id="subfoldersCheck" />
+                            <label class="form-check-label" for="subfoldersCheck">
+                                Включая подпапки
+                            </label>
+                        </div>
+                        @if (SelectedFiles.Any())
+                        {
+                            <button class="btn btn-outline-danger btn-lg px-4 ms-auto" @onclick="ClearFiles" disabled="@IsLoadingFiles">
+                                <i class="bi bi-trash me-2"></i>Очистить все (@SelectedFiles.Count)
+                            </button>
+                        }
+                    </div>
+
+                    @* НОВОЕ: Индикатор загрузки файлов *@
+                    @if (IsLoadingFiles)
+                    {
+                        <div class="alert alert-info mt-3 mb-0">
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border spinner-border-sm me-3" role="status">
+                                    <span class="visually-hidden">Загрузка...</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <strong>Обработка файлов...</strong>
+                                    <div class="progress mt-2" style="height: 8px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                             role="progressbar"
+                                             style="width: @LoadingProgress%">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted mt-1 d-block">
+                                        Обработано @LoadingFilesProcessed из @LoadingFilesTotal
+                                        @if (LoadingFilesRejected > 0)
+                                        {
+                                            <span class="text-warning ms-2">• Отклонено: @LoadingFilesRejected</span>
+                                        }
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Список файлов -->
+            @if (SelectedFiles.Any())
+            {
+                <div class="files-section mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            Выбрано файлов: <strong>@SelectedFiles.Count</strong>
+                        </h6>
+                        <span class="badge bg-primary-subtle text-primary">
+                            @GetTotalSize()
+                        </span>
+                    </div>
+
+                    <div class="files-list">
+                        @foreach (var file in SelectedFiles.Take(_displayedFilesCount))
+                        {
+                            <div class="file-item">
+                                <div class="file-icon">
+                                    <i class="bi @GetFileIcon(file)"></i>
+                                </div>
+                                <div class="file-info flex-grow-1">
+                                    <div class="file-name fw-medium">@Path.GetFileName(file)</div>
+                                    <div class="file-meta text-muted small">
+                                        @GetFileSize(file) • @(GetFileExtension(file).ToUpper())
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-ghost-danger" @onclick="() => RemoveFile(file)" title="Удалить">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        }
+
+                        @* Кнопки "Показать ещё" / "Свернуть" *@
+                        @if (SelectedFiles.Count > _displayedFilesCount)
+                        {
+                            <div class="text-center py-3">
+                                <button class="btn btn-sm btn-outline-primary px-4" @onclick="ShowMoreFiles">
+                                    <i class="bi bi-chevron-down me-1"></i>
+                                    Показать ещё 20 файлов
+                                    <span class="badge bg-primary ms-2">осталось @(SelectedFiles.Count - _displayedFilesCount)</span>
+                                </button>
+                            </div>
+                        }
+                        else if (_displayedFilesCount > 10)
+                        {
+                            <div class="text-center py-3">
+                                <button class="btn btn-sm btn-outline-secondary px-4" @onclick="ShowLessFiles">
+                                    <i class="bi bi-chevron-up me-1"></i>
+                                    Свернуть список
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state text-center py-5">
+                    <div class="empty-icon mb-3">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                    </div>
+                    <h5 class="mb-2">Нет выбранных файлов</h5>
+                    <p class="text-muted mb-4">Нажмите "Добавить файлы" или "Добавить папку"</p>
+                    <button class="btn btn-primary btn-lg px-5" @onclick="TriggerFileInput">
+                        <i class="bi bi-plus-circle me-2"></i>Выбрать файлы
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Настройки конвертации -->
+    @if (SelectedFiles.Any())
+    {
+        <div class="card modern-card mb-4">
+            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Параметры конвертации</h5>
+            </div>
+            <div class="card-body px-4 pb-4">
+                @if (BatchType == "mixed" || BatchType == "audio")
+                {
+                    <div class="mb-4 p-3 border rounded">
+                        <h6 class="fw-bold mb-3 text-primary">🎵 Настройки Аудио</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">Формат</label>
+                                <select class="form-select" value="@AudioOutputFormat" @onchange="OnAudioFormatChanged">
+                                    <option value="mp3">MP3 (совместимый)</option>
+                                    <option value="wav">WAV (без сжатия)</option>
+                                    <option value="flac">FLAC (без потерь)</option>
+                                    <option value="ogg">OGG Vorbis</option>
+                                    <option value="aac">AAC (лучше MP3)</option>
+                                    <option value="opus">OPUS (современный)</option>
+                                    <option value="m4a">M4A</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                @if (AudioSupportsBitrate)
+                                {
+                                    <label class="form-label fw-semibold mb-2">Битрейт: <span class="text-primary">@AudioBitrate</span> kbps</label>
+                                    <input type="range" class="form-range" min="64" max="320" step="32" value="@AudioBitrate" @oninput="OnAudioBitrateChanged" />
+                                    <div class="d-flex justify-content-between small text-muted">
+                                        <span>64</span><span>128</span><span>192</span><span>256</span><span>320</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <label class="form-label fw-semibold mb-2">Битрейт</label>
+                                    <div class="alert alert-info mb-0 py-2 small">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Для формата <strong>@AudioOutputFormat.ToUpper()</strong> битрейт не применяется (формат без потерь)
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="NormalizeAudio" id="normCheck" />
+                            <label class="form-check-label" for="normCheck">Нормализовать громкость</label>
+                        </div>
+                    </div>
+                }
+
+                @if (BatchType == "mixed" || BatchType == "image")
+                {
+                    <div class="mb-4 p-3 border rounded">
+                        <h6 class="fw-bold mb-3 text-success">🖼️ Настройки Изображений</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">Формат</label>
+                                <select class="form-select" value="@ImageOutputFormat" @onchange="OnImageFormatChanged">
+                                    <option value="png">PNG</option>
+                                    <option value="jpg">JPG</option>
+                                    <option value="webp">WebP</option>
+                                    <option value="avif">AVIF</option>
+                                    <option value="bmp">BMP</option>
+                                    <option value="ico">ICO</option>
+                                    <option value="gif">GIF</option>
+                                    <option value="tiff">TIFF</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                @if (ImageSupportsQuality)
+                                {
+                                    <label class="form-label fw-semibold mb-2">Качество: <span class="text-success">@ImageQuality</span>%</label>
+                                    <input type="range" class="form-range" min="1" max="100" value="@ImageQuality" @oninput="OnImageQualityChanged" />
+                                    <div class="d-flex justify-content-between small text-muted">
+                                        <span>1%</span><span>50%</span><span>100%</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <label class="form-label fw-semibold mb-2">Качество</label>
+                                    <div class="alert alert-info mb-0 py-2 small">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Для формата <strong>@ImageOutputFormat.ToUpper()</strong> качество не применяется (формат без потерь)
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" @bind="ResizeImages" id="resizeCheck" />
+                            <label class="form-check-label" for="resizeCheck">Изменить размер</label>
+                        </div>
+                        @if (ResizeImages)
+                        {
+                            <div class="row mt-2">
+                                <div class="col-6">
+                                    <label class="form-label small">Ширина: @ImageWidth px</label>
+                                    <input type="range" class="form-range" min="100" max="4096" step="100" value="@ImageWidth" @oninput="OnImageWidthChanged" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">Высота: @ImageHeight px</label>
+                                    <input type="range" class="form-range" min="100" max="4096" step="100" value="@ImageHeight" @oninput="OnImageHeightChanged" />
+                                </div>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" @bind="KeepAspectRatio" id="aspectCheck" />
+                                <label class="form-check-label" for="aspectCheck">Сохранить пропорции</label>
+                            </div>
+                            @if (ImageOutputFormat == "ico")
+                            {
+                                <div class="alert alert-warning mt-2 mb-0 py-2 small">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    Для ICO размер ограничен 256×256 пикселей
+                                </div>
+                            }
+                        }
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" @bind="OptimizeImages" id="optCheck" />
+                            <label class="form-check-label" for="optCheck">Оптимизировать размер (удалить метаданные)</label>
+                        </div>
+                    </div>
+                }
+
+                @if (BatchType == "mixed" || BatchType == "video")
+                {
+                    <div class="mb-4 p-3 border rounded">
+                        <h6 class="fw-bold mb-3 text-danger">🎬 Настройки Видео</h6>
+                        <div class="alert alert-warning mb-3 py-2">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Внимание!</strong> Конвертация видео может занять много времени.
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">Формат</label>
+                                <select class="form-select" value="@VideoOutputFormat" @onchange="OnVideoFormatChanged">
+                                    <option value="mp4">MP4 (совместимый)</option>
+                                    <option value="mkv">MKV (универсальный)</option>
+                                    <option value="avi">AVI</option>
+                                    <option value="mov">MOV</option>
+                                    <option value="webm">WebM</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">Видео кодек</label>
+                                <select class="form-select" value="@VideoCodec" @onchange="OnVideoCodecChanged">
+                                    <option value="libx264">H.264 (libx264)</option>
+                                    <option value="libx265">H.265/HEVC (libx265)</option>
+                                    <option value="mpeg4">MPEG-4</option>
+                                    <option value="vp9">VP9</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        @if (VideoSupportsCrf)
+                        {
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-semibold mb-2">Качество (CRF): <span class="text-danger">@VideoCrf</span></label>
+                                    <input type="range" class="form-range" min="0" max="51" value="@VideoCrf" @oninput="OnVideoCrfChanged" />
+                                    <div class="form-text">0 = без потерь, 23 = стандарт, 51 = худшее</div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-semibold mb-2">Preset (скорость)</label>
+                                    <select class="form-select" value="@VideoPreset" @onchange="OnVideoPresetChanged">
+                                        <option value="ultrafast">Ultrafast (быстро)</option>
+                                        <option value="superfast">Superfast</option>
+                                        <option value="veryfast">Veryfast</option>
+                                        <option value="faster">Faster</option>
+                                        <option value="fast">Fast</option>
+                                        <option value="medium">Medium (баланс)</option>
+                                        <option value="slow">Slow (медленно)</option>
+                                        <option value="slower">Slower</option>
+                                        <option value="veryslow">Veryslow (лучшее качество)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-semibold mb-2">QScale (качество): <span class="text-danger">@VideoQScale</span></label>
+                                    <input type="range" class="form-range" min="1" max="31" value="@VideoQScale" @oninput="OnVideoQScaleChanged" />
+                                    <div class="form-text">1 = лучшее, 31 = худшее</div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-semibold mb-2">Preset (скорость)</label>
+                                    <select class="form-select" value="@VideoPreset" @onchange="OnVideoPresetChanged">
+                                        <option value="ultrafast">Ultrafast</option>
+                                        <option value="superfast">Superfast</option>
+                                        <option value="veryfast">Veryfast</option>
+                                        <option value="faster">Faster</option>
+                                        <option value="fast">Fast</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="slow">Slow</option>
+                                    </select>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">Разрешение</label>
+                                <select class="form-select" value="@VideoResolution" @onchange="OnVideoResolutionChanged">
+                                    <option value="">Оригинальное</option>
+                                    <option value="2160p">4K (2160p)</option>
+                                    <option value="1440p">2K (1440p)</option>
+                                    <option value="1080p">Full HD (1080p)</option>
+                                    <option value="720p">HD (720p)</option>
+                                    <option value="480p">SD (480p)</option>
+                                    <option value="360p">360p</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">Аудио кодек</label>
+                                <select class="form-select" value="@VideoAudioCodec" @onchange="OnVideoAudioCodecChanged">
+                                    <option value="aac">AAC (рекомендуется)</option>
+                                    <option value="libmp3lame">MP3</option>
+                                    <option value="copy">Копировать (без перекодирования)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">Аудио битрейт: <span class="text-danger">@VideoAudioBitrate</span> kbps</label>
+                                <input type="range" class="form-range" min="64" max="320" step="32" value="@VideoAudioBitrate" @oninput="OnVideoAudioBitrateChanged" />
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>64</span><span>128</span><span>192</span><span>256</span><span>320</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold mb-2">FPS</label>
+                                <select class="form-select" value="@VideoFps" @onchange="OnVideoFpsChanged">
+                                    <option value="">Оригинальный</option>
+                                    <option value="24">24 fps (кино)</option>
+                                    <option value="25">25 fps (PAL)</option>
+                                    <option value="30">30 fps</option>
+                                    <option value="60">60 fps</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Кнопка начала -->
+        <div class="text-center mb-5">
+            <button class="btn btn-success btn-xl px-5 py-3" @onclick="StartBatchConversion" disabled="@IsConverting">
+                @if (IsConverting)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    <text>Конвертация...</text>
+                }
+                else
+                {
+                    <i class="bi bi-play-circle me-2"></i>
+                    <text>Начать конвертацию (@SelectedFiles.Count файлов)</text>
+                }
+            </button>
+            @if (IsConverting)
+            {
+                <button class="btn btn-outline-danger btn-xl px-5 py-3 ms-3" @onclick="CancelBatchConversion">
+                    <i class="bi bi-x-circle me-2"></i>Отмена
+                </button>
+            }
+        </div>
+
+        <!-- Прогресс -->
+        @if (IsConverting || BatchProgress > 0)
+        {
+            <div class="card modern-card mb-4 border-primary">
+                <div class="card-header bg-primary text-white pt-4 px-4">
+                    <h5 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Прогресс конвертации</h5>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <strong>Общий прогресс:</strong>
+                            <span class="text-primary">@BatchProgress% (файл @CurrentFileIndex из @SelectedFiles.Count)</span>
+                        </div>
+                        <div class="progress" style="height: 30px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                 role="progressbar" style="width: @BatchProgress%">
+                                <strong>@BatchProgress%</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <strong>Текущий файл:</strong>
+                            <span>@CurrentFileProgress%</span>
+                        </div>
+                        <div class="small text-muted mb-1 text-truncate" title="@CurrentFileName">@CurrentFileName</div>
+                        <div class="progress" style="height: 15px;">
+                            <div class="progress-bar bg-info" role="progressbar" style="width: @CurrentFileProgress%">
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(ConversionStatus))
+                    {
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>@ConversionStatus
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Результаты -->
+        @if (ConversionResults.Any())
+        {
+            <div class="card modern-card">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-clipboard-check me-2"></i>Результаты</h5>
+                        <span class="badge @(ConversionResults.All(r => r.Success) ? "bg-success" : "bg-warning") text-white px-3 py-2">
+                            Успешно: @ConversionResults.Count(r => r.Success) / @ConversionResults.Count
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <!-- Кнопки прокрутки -->
+                    <div class="d-flex justify-content-end mb-2 gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ScrollResultsLeft" title="Прокрутить влево">
+                            <i class="bi bi-arrow-left"></i> Влево
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ScrollResultsRight" title="Прокрутить вправо">
+                            Вправо <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <div class="table-responsive" id="resultsTable" style="max-height: 600px; overflow-x: auto;">
+                        <table class="table table-hover mb-0" style="min-width: 1200px;">
+                            <thead class="table-light" style="position: sticky; top: 0; background: white; z-index: 10;">
+                                <tr>
+                                    <th style="width: 60px; min-width: 60px;">#</th>
+                                    <th style="min-width: 300px; max-width: 400px;">Файл</th>
+                                    <th style="width: 120px; min-width: 120px;">Статус</th>
+                                    <th style="min-width: 200px; max-width: 300px;">Сообщение</th>
+                                    <th style="width: 100px; min-width: 100px;">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < ConversionResults.Count; i++)
+                                {
+                                    var result = ConversionResults[i];
+                                    <tr class="@(result.Success ? "" : "table-danger")">
+                                        <td style="vertical-align: middle;">@(i + 1)</td>
+                                        <td style="vertical-align: middle;">
+                                            <div class="d-flex align-items-center" style="max-width: 400px;">
+                                                <i class="bi @GetFileIcon(result.FilePath) me-2 fs-5" style="flex-shrink: 0;"></i>
+                                                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                    <div class="fw-medium" title="@Path.GetFileName(result.FilePath)">
+                                                        @Path.GetFileName(result.FilePath)
+                                                    </div>
+                                                    <small class="text-muted">@FormatFileSize(new FileInfo(result.FilePath).Length)</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td style="vertical-align: middle;">
+                                            @if (result.Success)
+                                            {
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle me-1"></i>Успешно
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-x-circle me-1"></i>Ошибка
+                                                </span>
+                                            }
+                                        </td>
+                                        <td style="vertical-align: middle;">
+                                            <small class="text-muted" style="overflow: hidden; text-overflow: ellipsis; display: block; max-width: 300px;" title="@result.Message">
+                                                @result.Message
+                                            </small>
+                                        </td>
+                                        <td style="vertical-align: middle;">
+                                            @if (result.Success && !string.IsNullOrEmpty(result.OutputPath) && File.Exists(result.OutputPath))
+                                            {
+                                                <button class="btn btn-sm btn-outline-success" @onclick="() => OpenFile(result.OutputPath)" title="Открыть папку с файлом">
+                                                    <i class="bi bi-folder2-open"></i>
+                                                </button>
+                                            }
+                                            else if (!string.IsNullOrEmpty(result.OutputPath))
+                                            {
+                                                <button class="btn btn-sm btn-outline-warning" @onclick="() => OpenFolder(result.OutputPath)" title="Открыть папку (файл не найден)">
+                                                    <i class="bi bi-folder"></i>
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .drop-zone-wrapper {
+        position: relative;
+    }
+
+    .drop-zone {
+        border: 3px dashed #667eea;
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        text-align: center;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        display: block;
+        text-decoration: none;
+        color: inherit;
+    }
+
+        .drop-zone.drag-over {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+            transform: scale(1.01);
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+        }
+
+        .drop-zone:hover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+    .drop-zone-content i {
+        color: #667eea;
+        transition: transform 0.3s ease;
+    }
+
+    .drop-zone.drag-over .drop-zone-content i {
+        transform: translateY(-10px) scale(1.1);
+    }
+
+    .drop-zone h4 {
+        color: inherit;
+    }
+
+    .batch-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+    }
+
+    .batch-header {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        border-left: 5px solid #667eea;
+    }
+
+    .icon-wrapper {
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 2rem;
+    }
+
+    .modern-card {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        background: white;
+        overflow: visible;
+    }
+
+    body.dark-theme .modern-card {
+        background: #1e1e2e;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .files-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 0.5rem;
+    }
+
+    body.dark-theme .files-list {
+        border-color: #3a3a5a;
+    }
+
+    .file-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border-radius: 8px;
+        transition: all 0.2s;
+        margin-bottom: 0.5rem;
+        cursor: default;
+    }
+
+        .file-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .file-item:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+    body.dark-theme .file-item:hover {
+        background: rgba(102, 126, 234, 0.1);
+    }
+
+    .file-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+
+    .btn-ghost-danger {
+        background: transparent;
+        border: none;
+        color: #dc3545;
+        opacity: 0.6;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+        .btn-ghost-danger:hover {
+            opacity: 1;
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+    .empty-state {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        border-radius: 12px;
+        padding: 3rem;
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        color: #667eea;
+        opacity: 0.5;
+    }
+
+    .btn-xl {
+        font-size: 1.1rem;
+        border-radius: 12px;
+        font-weight: 600;
+    }
+
+    body.dark-theme h2 {
+        color: #fff;
+    }
+
+    body.dark-theme .form-label {
+        color: #e0e0e0;
+    }
+
+    body.dark-theme .form-select,
+    body.dark-theme .form-control {
+        background: #2a2a3e;
+        border-color: #3a3a5a;
+        color: #fff;
+    }
+
+    body.dark-theme .table-light {
+        background: #2a2a3e;
+        color: #fff;
+    }
+    /* Исправление цветов alert'ов в тёмной теме */
+    body.dark-theme .alert-warning {
+        background-color: #664d03 !important;
+        border-color: #ffca2c !important;
+        color: #ffffff !important;
+    }
+
+        body.dark-theme .alert-warning strong {
+            color: #ffffff !important;
+        }
+
+        body.dark-theme .alert-warning .bi {
+            color: #ffffff !important;
+        }
+
+    body.dark-theme .alert-info {
+        background-color: #055160 !important;
+        border-color: #087990 !important;
+        color: #ffffff !important;
+    }
+
+        body.dark-theme .alert-info strong {
+            color: #ffffff !important;
+        }
+
+    body.dark-theme .alert-danger {
+        background-color: #842029 !important;
+        border-color: #b02a37 !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-theme .alert-success {
+        background-color: #0f5132 !important;
+        border-color: #198754 !important;
+        color: #ffffff !important;
+    }
+
+    .notification-toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 300px;
+        max-width: 500px;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        animation: slideIn 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+
+        .notification-toast.success {
+            background: rgba(40, 167, 69, 0.95);
+            color: white;
+        }
+
+        .notification-toast.warning {
+            background: rgba(255, 193, 7, 0.95);
+            color: #212529;
+        }
+
+        .notification-toast.error {
+            background: rgba(220, 53, 69, 0.95);
+            color: white;
+        }
+
+        .notification-toast.info {
+            background: rgba(102, 126, 234, 0.95);
+            color: white;
+        }
+
+    .notification-content {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-grow: 1;
+    }
+
+        .notification-content i {
+            font-size: 1.5rem;
+        }
+
+    .btn-close {
+        background: rgba(255,255,255,0.3);
+        border: none;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .btn-close:hover {
+            background: rgba(255,255,255,0.5);
+        }
+
+    .batch-container * {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    .batch-container input,
+    .batch-container textarea,
+    .batch-container select {
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+    }
+
+    .batch-container *:focus {
+        outline: none;
+    }
+
+    .batch-container input:focus,
+    .batch-container select:focus,
+    .batch-container textarea:focus {
+        outline: 2px solid #667eea;
+        outline-offset: 2px;
+    }
+</style>
+
+@code {
+    // ===== Основные поля =====
+    private string BatchType = "mixed";
+    private List<string> SelectedFiles = new();
+    private string OutputPath = "";
+    private HashSet<string> _selectedFilesSet = new();
+    private bool _isDragOver = false;
+    private bool IncludeSubfolders = false;
+
+    // ===== Индикатор загрузки файлов =====
+    private bool IsLoadingFiles = false;
+    private int LoadingProgress = 0;
+    private int LoadingFilesProcessed = 0;
+    private int LoadingFilesTotal = 0;
+    private int LoadingFilesRejected = 0;
+
+    // ===== Audio settings =====
+    private string AudioOutputFormat = "mp3";
+    private int AudioBitrate = 192;
+    private bool NormalizeAudio = false;
+
+    // ===== Image settings =====
+    private string ImageOutputFormat = "png";
+    private int ImageQuality = 85;
+    private bool ResizeImages = false;
+    private int ImageWidth = 1920;
+    private int ImageHeight = 1080;
+    private bool KeepAspectRatio = true;
+    private bool OptimizeImages = false;
+    private bool AudioSupportsBitrate => AudioOutputFormat is not ("wav" or "flac");
+    private bool ImageSupportsQuality => ImageOutputFormat is "jpg" or "jpeg" or "webp" or "avif" or "heic";
+    private bool VideoSupportsCrf => VideoCodec is not "mpeg4";
+
+    // ===== Video settings =====
+    private string VideoOutputFormat = "mp4";
+    private string VideoCodec = "libx264";
+    private int VideoCrf = 23;
+    private int VideoQScale = 2;
+    private string VideoPreset = "medium";
+    private string VideoResolution = "";
+    private int VideoAudioBitrate = 192;
+    private string VideoAudioCodec = "aac";
+    private string VideoFps = "";
+
+    // ===== Conversion state =====
+    private bool IsConverting = false;
+    private int CurrentFileIndex = 0;
+    private string CurrentFileName = "";
+    private string ConversionStatus = "";
+    private List<ConversionResult> ConversionResults = new();
+    private CancellationTokenSource? Cts;
+    private int _displayedFilesCount = 10;
+
+    private int _currentFileProgress;
+    private int CurrentFileProgress
+    {
+        get => _currentFileProgress;
+        set => _currentFileProgress = Math.Max(0, Math.Min(100, value));
+    }
+
+    private int _batchProgress;
+    private int BatchProgress
+    {
+        get => _batchProgress;
+        set => _batchProgress = Math.Max(0, Math.Min(100, value));
+    }
+
+    private void ShowMoreFiles()
+    {
+        _displayedFilesCount = Math.Min(_displayedFilesCount + 20, SelectedFiles.Count);
+        StateHasChanged();
+    }
+
+    private void ShowLessFiles()
+    {
+        _displayedFilesCount = 10;
+        StateHasChanged();
+    }
+
+    private NotificationMessage? CurrentNotification;
+
+    // ===== Вспомогательные классы =====
+    private class NotificationMessage
+    {
+        public string Message { get; set; } = "";
+        public NotificationType Type { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.Now;
+    }
+
+    private async Task ScrollResultsLeft()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("BatchScroll.scrollLeft", "resultsTable");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Batch: ошибка прокрутки влево: {ex.Message}");
+        }
+    }
+
+    private async Task ScrollResultsRight()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("BatchScroll.scrollRight", "resultsTable");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Batch: ошибка прокрутки вправо: {ex.Message}");
+        }
+    }
+
+    private void OpenFolder(string filePath)
+    {
+        try
+        {
+            var folder = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = folder,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Batch: ошибка открытия папки {filePath}: {ex.Message}");
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Подписываемся на горячие клавиши
+                Hotkeys.OnCancelRequested += HandleCancel;
+
+                // Инициализируем с защитой от ошибок
+                await Hotkeys.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                // Если горячие клавиши не работают — это не критично
+                // Логируем и продолжаем работу
+                try
+                {
+                    Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}");
+                }
+                catch { }
+            }
+        }
+    }
+
+    private async Task HandleCancel()
+    {
+        if (IsConverting) CancelBatchConversion();
+    }
+
+
+    private enum NotificationType
+    {
+        Success,
+        Warning,
+        Error,
+        Info
+    }
+    private string GetTotalSize()
+    {
+        try
+        {
+            long total = 0;
+            foreach (var file in SelectedFiles.Take(100))
+            {
+                try
+                {
+                    if (File.Exists(file))
+                        total += new FileInfo(file).Length;
+                }
+                catch { }
+            }
+            return FormatFileSize(total);
+        }
+        catch
+        {
+            return "0 Б";
+        }
+    }
+
+    private string GetFileSize(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+                return FormatFileSize(new FileInfo(filePath).Length);
+            return "0 Б";
+        }
+        catch
+        {
+            return "0 Б";
+        }
+    }
+
+    private class ConversionResult
+    {
+        public string FilePath { get; set; } = "";
+        public string OutputPath { get; set; } = "";
+        public bool Success { get; set; }
+        public string Message { get; set; } = "";
+    }
+
+    // ===== Инициализация =====
+    protected override void OnInitialized()
+    {
+        OutputPath = GetDefaultOutputPath();
+    }
+
+    // ===== Валидация пути =====
+    private bool IsValidOutputPath
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(OutputPath))
+                return false;
+
+            try
+            {
+                var invalidPaths = new[] {
+                    @"C:\Windows",
+                    @"C:\Windows\System32",
+                    @"C:\Program Files",
+                    @"C:\Program Files (x86)",
+                    Environment.SystemDirectory,
+                    Environment.GetFolderPath(Environment.SpecialFolder.Windows)
+                };
+
+                var normalizedPath = Path.GetFullPath(OutputPath).ToLower();
+                return !invalidPaths.Any(p => normalizedPath.StartsWith(p.ToLower()));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    private string GetDefaultOutputPath()
+    {
+        return BatchType switch
+        {
+            "audio" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "DazzConv_Batch"),
+            "image" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "DazzConv_Batch"),
+            "video" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "DazzConv_Batch"),
+            _ => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "DazzConv_Batch")
+        };
+    }
+
+    private string GetAcceptTypes()
+    {
+        if (BatchType == "mixed")
+        {
+            return string.Join(",", AllowedExtensions.Values.SelectMany(x => x));
+        }
+        return BatchType switch
+        {
+            "audio" => ".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma,.opus,.ac3,.aiff",
+            "image" => ".jpg,.jpeg,.png,.gif,.bmp,.webp,.avif,.tiff,.ico,.heic,.raw",
+            "video" => ".mp4,.avi,.mkv,.mov,.wmv,.flv,.webm,.m4v,.mpeg,.mpg",
+            _ => "*"
+        };
+    }
+
+    private string GetFileType(string extension)
+    {
+        var ext = extension.ToLowerInvariant();
+        if (!ext.StartsWith(".")) ext = "." + ext;
+
+        if (AllowedExtensions["audio"].Contains(ext)) return "audio";
+        if (AllowedExtensions["image"].Contains(ext)) return "image";
+        if (AllowedExtensions["video"].Contains(ext)) return "video";
+        return "unknown";
+    }
+
+    // ===== выбор файлов =====
+    private async Task TriggerFileInput()
+    {
+        try
+        {
+            // Проверяем что элемент существует
+            var exists = await JSRuntime.InvokeAsync<bool>("eval",
+                "document.getElementById('batchFileInput') !== null");
+
+            Logger.LogInfo($"TriggerFileInput: элемент существует = {exists}");
+
+            if (!exists)
+            {
+                await ShowNotification("❌ Элемент выбора файлов не найден!", NotificationType.Error);
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync("clickElement", "batchFileInput");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Ошибка TriggerFileInput", ex);
+            await ShowNotification($"Ошибка: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    private readonly Dictionary<string, string[]> AllowedExtensions = new()
+{
+    { "audio", new[] { ".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".opus", ".ac3", ".aiff" } },
+    { "image", new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".avif", ".tiff", ".ico" } },
+    { "video", new[] { ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".mpg", ".3gp" } }
+};
+
+    private async Task OnMultipleFilesSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            Logger.LogInfo($"=== Начало обработки файлов ===");
+            Logger.LogInfo($"BatchType: {BatchType}");
+
+            var files = e.GetMultipleFiles(10000);
+            var totalFiles = files.Count;
+
+            Logger.LogInfo($"Получено файлов: {totalFiles}");
+
+            // Показываем индикатор загрузки
+            IsLoadingFiles = true;
+            LoadingProgress = 0;
+            LoadingFilesProcessed = 0;
+            LoadingFilesTotal = totalFiles;
+            LoadingFilesRejected = 0;
+            StateHasChanged();
+
+            var addedCount = 0;
+            var rejectedCount = 0;
+            var rejectionReasons = new List<string>();
+
+            var allowedExts = BatchType == "mixed"
+                ? AllowedExtensions.Values.SelectMany(x => x).ToArray()
+                : AllowedExtensions[BatchType];
+
+            var tempFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Batch");
+            Directory.CreateDirectory(tempFolder);
+
+            // Обрабатываем файлы порциями по 50 штук для обновления UI
+            const int batchSize = 50;
+            for (int i = 0; i < totalFiles; i++)
+            {
+                var file = files[i];
+                var fileName = file.Name;
+                var ext = Path.GetExtension(fileName).ToLowerInvariant();
+
+                // ПРОВЕРКА 1: Расширение
+                if (string.IsNullOrEmpty(ext) || !allowedExts.Contains(ext))
+                {
+                    if (!string.IsNullOrEmpty(ext))
+                    {
+                        rejectionReasons.Add($"{fileName}: формат {ext.ToUpper()} не поддерживается");
+                    }
+                    else
+                    {
+                        rejectionReasons.Add($"{fileName}: нет расширения");
+                    }
+                    rejectedCount++;
+                    LoadingFilesProcessed++;
+                    LoadingFilesRejected++;
+
+                    // Обновляем UI каждые batchSize файлов
+                    if (i % batchSize == 0 || i == totalFiles - 1)
+                    {
+                        LoadingProgress = (int)((double)LoadingFilesProcessed / totalFiles * 100);
+                        StateHasChanged();
+                    }
+                    continue;
+                }
+
+                // ПРОВЕРКА 2: Имя файла
+                var safeName = SanitizeFileName(fileName);
+                if (string.IsNullOrEmpty(safeName))
+                {
+                    rejectionReasons.Add($"{fileName}: недопустимое имя файла");
+                    rejectedCount++;
+                    LoadingFilesProcessed++;
+                    LoadingFilesRejected++;
+                    continue;
+                }
+
+                // ПРОВЕРКА 3: Дубликаты
+                if (_selectedFilesSet.Contains(safeName))
+                {
+                    rejectionReasons.Add($"{fileName}: файл уже добавлен");
+                    rejectedCount++;
+                    LoadingFilesProcessed++;
+                    LoadingFilesRejected++;
+                    continue;
+                }
+
+                var destPath = Path.Combine(tempFolder, safeName);
+                var counter = 1;
+                while (File.Exists(destPath))
+                {
+                    var nameWithoutExt = Path.GetFileNameWithoutExtension(safeName);
+                    destPath = Path.Combine(tempFolder, $"{nameWithoutExt}_{counter}{ext}");
+                    counter++;
+                }
+
+                try
+                {
+                    using var readStream = file.OpenReadStream(maxAllowedSize: 2L * 1024 * 1024 * 1024);
+                    using var writeStream = File.Create(destPath);
+                    await readStream.CopyToAsync(writeStream);
+
+                    // ПРОВЕРКА 4: Magic numbers
+                    if (!ValidateFileContent(destPath, ext))
+                    {
+                        File.Delete(destPath);
+                        rejectionReasons.Add($"{fileName}: содержимое не соответствует формату {ext.ToUpper()}");
+                        rejectedCount++;
+                        LoadingFilesProcessed++;
+                        LoadingFilesRejected++;
+                        continue;
+                    }
+
+                    SelectedFiles.Add(destPath);
+                    _selectedFilesSet.Add(safeName);
+                    addedCount++;
+                    LoadingFilesProcessed++;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError($"Ошибка копирования {safeName}", ex);
+                    try { if (File.Exists(destPath)) File.Delete(destPath); } catch { }
+                    rejectionReasons.Add($"{fileName}: ошибка чтения файла");
+                    rejectedCount++;
+                    LoadingFilesProcessed++;
+                    LoadingFilesRejected++;
+                }
+
+                // Обновляем UI каждые batchSize файлов
+                if (i % batchSize == 0 || i == totalFiles - 1)
+                {
+                    LoadingProgress = (int)((double)LoadingFilesProcessed / totalFiles * 100);
+                    StateHasChanged();
+                    // Даём UI время отрисоваться
+                    await Task.Delay(1);
+                }
+            }
+
+            Logger.LogInfo($"=== ИТОГО ===");
+            Logger.LogInfo($"Добавлено: {addedCount}, Отклонено: {rejectedCount}");
+
+            // Показываем toast с причинами отклонения
+            if (rejectionReasons.Any())
+            {
+                await ShowRejectionToast(rejectionReasons);
+            }
+
+            // Показываем toast об успехе
+            if (addedCount > 0)
+            {
+                await JSRuntime.InvokeVoidAsync("showToast",
+                    $"✅ Добавлено файлов: {addedCount}", "success");
+            }
+            else if (rejectedCount > 0)
+            {
+                await JSRuntime.InvokeVoidAsync("showToast",
+                    $"❌ Все файлы отклонены! Проверьте лог для деталей", "error");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Критическая ошибка добавления файлов", ex);
+            await ShowNotification($"Ошибка: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            IsLoadingFiles = false;
+            StateHasChanged();
+        }
+    }
+
+    // Проверка содержимого файла по magic numbers (теперь синхронная, работает с файлом на диске)
+    private bool ValidateFileContent(string filePath, string extension)
+    {
+        try
+        {
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length < 4) return false;
+
+            var buffer = new byte[12];
+            using var fs = File.OpenRead(filePath);
+            fs.Read(buffer, 0, Math.Min(12, (int)fileInfo.Length));
+
+            // Проверяем по расширениям
+            var isValid = extension.ToLower() switch
+            {
+                // ===== АУДИО =====
+                ".mp3" => (buffer[0] == 0xFF && (buffer[1] & 0xE0) == 0xE0) || // Sync bytes
+                          (buffer[0] == 0x49 && buffer[1] == 0x44 && buffer[2] == 0x33), // ID3 тег
+
+                ".wav" => buffer[0] == 0x52 && buffer[1] == 0x49 &&
+                          buffer[2] == 0x46 && buffer[3] == 0x46, // RIFF
+
+                ".flac" => buffer[0] == 0x66 && buffer[1] == 0x4C &&
+                           buffer[2] == 0x61 && buffer[3] == 0x43, // fLaC
+
+                ".ogg" => buffer[0] == 0x4F && buffer[1] == 0x67 &&
+                          buffer[2] == 0x67 && buffer[3] == 0x53, // OggS
+
+                ".aac" => true, // Сложно определить - пропускаем
+
+                ".m4a" => CheckFtypBox(buffer), // ftyp box (может быть на разных позициях)
+
+                ".wma" => true, // Сложно определить - пропускаем
+
+                ".opus" => true, // Сложно определить - пропускаем
+
+                ".ac3" => true, // Сложно определить - пропускаем
+
+                ".aiff" => buffer[0] == 0x46 && buffer[1] == 0x4F &&
+                           buffer[2] == 0x52 && buffer[3] == 0x4D, // FORM
+
+                // ===== ИЗОБРАЖЕНИЯ =====
+                ".jpg" or ".jpeg" => buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF,
+
+                ".png" => buffer[0] == 0x89 && buffer[1] == 0x50 &&
+                          buffer[2] == 0x4E && buffer[3] == 0x47,
+
+                ".gif" => buffer[0] == 0x47 && buffer[1] == 0x49 && buffer[2] == 0x46,
+
+                ".bmp" => buffer[0] == 0x42 && buffer[1] == 0x4D,
+
+                ".webp" => buffer[0] == 0x52 && buffer[1] == 0x49 &&
+                           buffer[2] == 0x46 && buffer[3] == 0x46 &&
+                           buffer[8] == 0x57 && buffer[9] == 0x45 &&
+                           buffer[10] == 0x42 && buffer[11] == 0x50,
+
+                ".avif" => CheckFtypBox(buffer),
+
+                ".tiff" => (buffer[0] == 0x49 && buffer[1] == 0x49) ||
+                           (buffer[0] == 0x4D && buffer[1] == 0x4D),
+
+                ".ico" => buffer[0] == 0x00 && buffer[1] == 0x00 &&
+                          buffer[2] == 0x01 && buffer[3] == 0x00,
+
+                ".heic" => true, // Сложно определить - пропускаем
+
+                // ===== ВИДЕО =====
+                ".mp4" => CheckFtypBox(buffer),
+
+                ".avi" => buffer[0] == 0x52 && buffer[1] == 0x49 &&
+                          buffer[2] == 0x46 && buffer[3] == 0x46,
+
+                ".mkv" => buffer[0] == 0x1A && buffer[1] == 0x45 &&
+                          buffer[2] == 0xDF && buffer[3] == 0xA3,
+
+                ".mov" => CheckFtypBox(buffer),
+
+                ".wmv" => buffer[0] == 0x30 && buffer[1] == 0x26 &&
+                          buffer[2] == 0xB2 && buffer[3] == 0x75,
+
+                ".flv" => buffer[0] == 0x46 && buffer[1] == 0x4C && buffer[2] == 0x56,
+
+                ".webm" => buffer[0] == 0x1A && buffer[1] == 0x45 &&
+                           buffer[2] == 0xDF && buffer[3] == 0xA3,
+
+                ".m4v" => CheckFtypBox(buffer),
+
+                ".mpeg" or ".mpg" => buffer[0] == 0x00 && buffer[1] == 0x00 &&
+                                     buffer[2] == 0x01 && (buffer[3] == 0xBA || buffer[3] == 0xB3),
+
+                ".3gp" => true, // Сложно определить - пропускаем
+
+                // ===== ЗАПРЕЩЁННЫЕ ФОРМАТЫ =====
+                ".exe" or ".dll" or ".bat" or ".cmd" or ".scr" or
+                ".com" or ".pif" or ".vbs" or ".js" or ".msi" => false,
+
+                // ===== НЕИЗВЕСТНЫЕ - РАЗРЕШАЕМ =====
+                _ => true
+            };
+
+            if (!isValid)
+            {
+                Logger.LogWarning($"Magic numbers не совпали для {Path.GetFileName(filePath)} (расширение: {extension})");
+            }
+
+            return isValid;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Ошибка проверки magic numbers: {filePath}", ex);
+            // При ошибке проверки - разрешаем файл (лучше конвертировать, чем отклонить)
+            return true;
+        }
+    }
+
+    // Проверка ftyp box для MP4/MOV/AVIF/M4A
+    private bool CheckFtypBox(byte[] buffer)
+    {
+        // ftyp box может быть на позиции 4 или 8
+        if (buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 &&
+            buffer[6] == 0x79 && buffer[7] == 0x70)
+            return true;
+
+        if (buffer.Length >= 12 && buffer[8] == 0x66 && buffer[9] == 0x74 &&
+            buffer[10] == 0x79 && buffer[11] == 0x70)
+            return true;
+
+        return false;
+    }
+
+    private async Task ShowRejectionToast(List<string> reasons, string title = "⚠️ Некоторые файлы отклонены")
+    {
+        if (!reasons.Any()) return;
+
+        var message = title + "\n\n";
+
+        // Показываем максимум 5 причин, чтобы toast не был слишком длинным
+        var shownReasons = reasons.Take(5).ToList();
+        foreach (var reason in shownReasons)
+        {
+            message += $"• {reason}\n";
+        }
+
+        if (reasons.Count > 5)
+        {
+            message += $"\n...и ещё {reasons.Count - 5} файлов";
+        }
+
+        // Используем JS toast напрямую (не через ShowNotification)
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", message, "warning");
+        }
+        catch
+        {
+            // Fallback на обычное уведомление
+            await ShowNotification(message, NotificationType.Warning);
+        }
+    }
+
+    private string SanitizeFileName(string fileName)
+    {
+        fileName = Path.GetFileName(fileName);
+
+        foreach (var c in Path.GetInvalidFileNameChars())
+        {
+            fileName = fileName.Replace(c, '_');
+        }
+
+        while (true)
+        {
+            var ext = Path.GetExtension(fileName);
+            if (string.IsNullOrEmpty(ext)) break;
+
+            var withoutExt = Path.GetFileNameWithoutExtension(fileName);
+            var innerExt = Path.GetExtension(withoutExt);
+
+            if (!string.IsNullOrEmpty(innerExt) && innerExt.Length >= 3 && innerExt.Length <= 5)
+            {
+                var innerExtClean = innerExt.TrimStart('.').ToLower();
+                if (new[] { "mp3", "mp4", "wav", "avi", "mkv", "mov", "flac", "ogg", "aac", "m4a", "webm", "flv", "wmv" }.Contains(innerExtClean))
+                {
+                    fileName = withoutExt;
+                    continue;
+                }
+            }
+            break;
+        }
+
+        // Ограничиваем длину
+        if (fileName.Length > 100)
+        {
+            var ext = Path.GetExtension(fileName);
+            var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+            fileName = nameWithoutExt.Substring(0, 100 - ext.Length) + ext;
+        }
+
+        return fileName.Trim();
+    }
+
+
+    private async Task SelectFolder()
+    {
+        try
+        {
+            string? folder = null;
+
+#if WINDOWS
+    folder = await Win32FolderPicker.PickFolderAsync(
+    $"Выберите папку с {BatchType switch { "audio" => "аудио", "image" => "изображениями", "video" => "видео", _ => "файлами" }}");
+#else
+            var options = new PickOptions
+            {
+                PickerTitle = $"Выберите любой файл в папке с {BatchType switch { "audio" => "аудио", "image" => "изображениями", "video" => "видео" }}"
+            };
+            var result = await FilePicker.Default.PickAsync(options);
+            if (result != null)
+            {
+                folder = Path.GetDirectoryName(result.FullPath);
+            }
+#endif
+
+            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+            {
+                await ShowNotification("⚠️ Папка не выбрана", NotificationType.Warning);
+                return;
+            }
+
+            var extensions = BatchType switch
+            {
+                "audio" => new[] { ".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".opus", ".ac3", ".aiff" },
+                "image" => new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".avif", ".tiff", ".ico", ".heic", ".raw" },
+                "video" => new[] { ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".mpg" },
+                "mixed" => AllowedExtensions.Values.SelectMany(x => x).ToArray(),
+                _ => Array.Empty<string>()
+            };
+
+            // ИСПРАВЛЕНО: используем TopDirectoryOnly по умолчанию
+            var searchOption = IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+
+            Logger.LogInfo($"Batch: поиск файлов в {folder} (подпапки: {IncludeSubfolders})");
+
+            var files = new List<string>();
+            await Task.Run(() =>
+            {
+                foreach (var ext in extensions)
+                {
+                    try
+                    {
+                        files.AddRange(Directory.EnumerateFiles(folder, $"*{ext}", searchOption));
+                    }
+                    catch { }
+                }
+            });
+
+            Logger.LogInfo($"Batch: найдено {files.Count} файлов с нужными расширениями");
+
+            var newFiles = files.Where(f => !_selectedFilesSet.Contains(Path.GetFileName(f))).ToList();
+
+            if (newFiles.Any())
+            {
+                // Показываем индикатор
+                IsLoadingFiles = true;
+                LoadingProgress = 0;
+                LoadingFilesProcessed = 0;
+                LoadingFilesTotal = newFiles.Count;
+                LoadingFilesRejected = 0;
+                StateHasChanged();
+
+                var addedCount = 0;
+                var rejectionReasons = new List<string>();
+                const int batchSize = 50;
+
+                for (int i = 0; i < newFiles.Count; i++)
+                {
+                    var file = newFiles[i];
+                    var ext = Path.GetExtension(file).ToLowerInvariant();
+
+                    var allowedExtsForFolder = BatchType == "mixed"
+                        ? AllowedExtensions.Values.SelectMany(x => x).ToArray()
+                        : AllowedExtensions[BatchType];
+
+                    if (!allowedExtsForFolder.Contains(ext))
+                    {
+                        rejectionReasons.Add($"{Path.GetFileName(file)}: формат {ext.ToUpper()} не поддерживается");
+                        LoadingFilesRejected++;
+                        LoadingFilesProcessed++;
+
+                        if (i % batchSize == 0 || i == newFiles.Count - 1)
+                        {
+                            LoadingProgress = (int)((double)LoadingFilesProcessed / newFiles.Count * 100);
+                            StateHasChanged();
+                        }
+                        continue;
+                    }
+
+                    if (file.Length > 240)
+                    {
+                        Logger.LogWarning($"Batch: пропущен файл со слишком длинным путём ({file.Length} символов): {file}");
+                        rejectionReasons.Add($"{Path.GetFileName(file)}: путь слишком длинный");
+                        LoadingFilesRejected++;
+                        LoadingFilesProcessed++;
+                        continue;
+                    }
+
+                    if (!ValidateFileContent(file, ext))
+                    {
+                        rejectionReasons.Add($"{Path.GetFileName(file)}: содержимое не соответствует формату {ext.ToUpper()}");
+                        LoadingFilesRejected++;
+                        LoadingFilesProcessed++;
+
+                        if (i % batchSize == 0 || i == newFiles.Count - 1)
+                        {
+                            LoadingProgress = (int)((double)LoadingFilesProcessed / newFiles.Count * 100);
+                            StateHasChanged();
+                        }
+                        continue;
+                    }
+
+                    SelectedFiles.Add(file);
+                    _selectedFilesSet.Add(Path.GetFileName(file));
+                    addedCount++;
+                    LoadingFilesProcessed++;
+
+                    if (i % batchSize == 0 || i == newFiles.Count - 1)
+                    {
+                        LoadingProgress = (int)((double)LoadingFilesProcessed / newFiles.Count * 100);
+                        StateHasChanged();
+                        await Task.Delay(1);
+                    }
+                }
+
+                IsLoadingFiles = false;
+
+                if (rejectionReasons.Any())
+                {
+                    await ShowRejectionToast(rejectionReasons);
+                }
+
+                if (addedCount > 0)
+                {
+                    await JSRuntime.InvokeVoidAsync("showToast",
+                        $"✅ Добавлено {addedCount} файлов из папки", "success");
+                }
+                else if (rejectionReasons.Any())
+                {
+                    await JSRuntime.InvokeVoidAsync("showToast",
+                        $"❌ Все файлы в папке отклонены!", "error");
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("showToast",
+                        $"⚠️ Новые файлы не найдены", "info");
+                }
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("showToast",
+                    $"⚠️ Новые файлы не найдены в папке", "info");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError("Ошибка выбора папки", ex);
+            await ShowNotification($"Ошибка: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            IsLoadingFiles = false;
+            StateHasChanged();
+        }
+    }
+
+
+    private async Task ChooseOutputFolder()
+    {
+        try
+        {
+            var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для сохранения");
+
+            if (!string.IsNullOrWhiteSpace(folder))
+            {
+                OutputPath = folder;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Ошибка выбора папки вывода", ex);
+        }
+    }
+
+    // ===== Обработчики изменений =====
+    private void OnBatchTypeChanged(ChangeEventArgs e)
+    {
+        BatchType = e.Value?.ToString() ?? "mixed";
+        OutputPath = GetDefaultOutputPath();
+
+        if (SelectedFiles.Any())
+        {
+            ClearFiles();
+        }
+
+        StateHasChanged();
+    }
+
+    private bool HasEnoughDiskSpace(string path, long requiredBytes)
+    {
+        var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!);
+        return drive.AvailableFreeSpace > requiredBytes;
+    }
+
+    private void OnAudioFormatChanged(ChangeEventArgs e) { AudioOutputFormat = e.Value?.ToString() ?? "mp3"; StateHasChanged(); }
+    private void OnAudioBitrateChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) AudioBitrate = v; }
+    private void OnImageFormatChanged(ChangeEventArgs e) { ImageOutputFormat = e.Value?.ToString() ?? "png"; StateHasChanged(); }
+    private void OnImageQualityChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) ImageQuality = v; }
+    private void OnImageWidthChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) ImageWidth = v; }
+    private void OnImageHeightChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) ImageHeight = v; }
+    private void OnVideoFormatChanged(ChangeEventArgs e) { VideoOutputFormat = e.Value?.ToString() ?? "mp4"; StateHasChanged(); }
+    private void OnVideoCodecChanged(ChangeEventArgs e)
+    {
+        VideoCodec = e.Value?.ToString() ?? "libx264";
+        // Для MPEG-4 сбрасываем preset в medium
+        if (VideoCodec == "mpeg4") VideoPreset = "medium";
+        StateHasChanged();
+    }
+    private void OnVideoCrfChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) VideoCrf = Math.Max(0, Math.Min(51, v)); }
+    private void OnVideoQScaleChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) VideoQScale = Math.Max(1, Math.Min(31, v)); }
+    private void OnVideoPresetChanged(ChangeEventArgs e) { VideoPreset = e.Value?.ToString() ?? "medium"; }
+    private void OnVideoResolutionChanged(ChangeEventArgs e) { VideoResolution = e.Value?.ToString() ?? ""; }
+    private void OnVideoAudioBitrateChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) VideoAudioBitrate = v; }
+    private void OnVideoAudioCodecChanged(ChangeEventArgs e) { VideoAudioCodec = e.Value?.ToString() ?? "aac"; }
+    private void OnVideoFpsChanged(ChangeEventArgs e) { VideoFps = e.Value?.ToString() ?? ""; }
+
+    // ===== Управление файлами =====
+    private void RemoveFile(string file)
+    {
+        var fileName = Path.GetFileName(file);
+        SelectedFiles.Remove(file);
+        _selectedFilesSet.Remove(fileName);
+
+        try
+        {
+            if (File.Exists(file) && file.Contains("DazzConv_Batch"))
+                File.Delete(file);
+        }
+        catch { }
+
+        StateHasChanged();
+    }
+
+    private void ClearFiles()
+    {
+        foreach (var file in SelectedFiles)
+        {
+            try
+            {
+                if (!File.Exists(file)) continue;
+
+                // 🛡️ ЗАЩИТА: удаляем ТОЛЬКО если файл в DazzConv_Batch И не в OutputPath
+                if (!file.Contains("DazzConv_Batch")) continue;
+
+                try
+                {
+                    var normalizedFile = Path.GetFullPath(file);
+                    var normalizedOutput = Path.GetFullPath(OutputPath);
+
+                    if (normalizedFile.StartsWith(normalizedOutput, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Logger.LogWarning($"Batch: пропущено удаление — файл в OutputPath: {Path.GetFileName(file)}");
+                        continue;
+                    }
+                }
+                catch { }
+
+                File.Delete(file);
+            }
+            catch { }
+        }
+
+        CleanupAllTempFiles();
+
+        SelectedFiles.Clear();
+        _selectedFilesSet.Clear();
+        ConversionResults.Clear();
+        BatchProgress = 0;
+        StateHasChanged();
+    }
+
+    // ===== Конвертация =====
+    private async Task StartBatchConversion()
+    {
+        var invalidFiles = new List<string>();
+        foreach (var file in SelectedFiles)
+        {
+            if (!File.Exists(file))
+            {
+                invalidFiles.Add($"{Path.GetFileName(file)} (файл не найден)");
+                continue;
+            }
+
+            var ext = Path.GetExtension(file).ToLowerInvariant();
+            if (!ValidateFileContent(file, ext))
+            {
+                invalidFiles.Add($"{Path.GetFileName(file)} (неверный формат)");
+            }
+        }
+
+        if (invalidFiles.Any())
+        {
+            // Удаляем невалидные файлы из списка
+            foreach (var invalidFile in invalidFiles)
+            {
+                var fileName = invalidFile.Split(" (")[0];
+                var fileToRemove = SelectedFiles.FirstOrDefault(f => Path.GetFileName(f) == fileName);
+                if (fileToRemove != null)
+                {
+                    SelectedFiles.Remove(fileToRemove);
+                    _selectedFilesSet.Remove(fileName);
+                }
+            }
+
+            Logger.LogWarning($"Удалено невалидных файлов перед конвертацией: {invalidFiles.Count}");
+
+            // Показываем toast с деталями
+            await ShowRejectionToast(invalidFiles, "⚠️ Обнаружены проблемные файлы");
+
+            if (!SelectedFiles.Any())
+            {
+                await JSRuntime.InvokeVoidAsync("showToast",
+                    "❌ Все файлы невалидны! Конвертация отменена.", "error");
+                return;
+            }
+        }
+
+        if (!SelectedFiles.Any())
+        {
+            await ShowNotification("Выберите файлы для конвертации", NotificationType.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(OutputPath))
+        {
+            await ShowNotification("Введите путь к папке для сохранения", NotificationType.Warning);
+            return;
+        }
+
+        if (!IsValidOutputPath)
+        {
+            await ShowNotification("❌ Нельзя сохранять в системные папки!", NotificationType.Error);
+            return;
+        }
+
+        try
+        {
+            if (!Directory.Exists(OutputPath))
+                Directory.CreateDirectory(OutputPath);
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"❌ Ошибка создания папки: {ex.Message}", NotificationType.Error);
+            return;
+        }
+
+        bool wasCancelled = false;
+
+        try
+        {
+            IsConverting = true;
+            Cts = new CancellationTokenSource();
+            ConversionResults.Clear();
+            var ffmpegPath = FFmpegService.GetFFmpegPath();
+
+            for (int i = 0; i < SelectedFiles.Count; i++)
+            {
+                // 🛡️ ПРОВЕРКА ОТМЕНЫ ПЕРЕД КАЖДЫМ ФАЙЛОМ
+                if (Cts.IsCancellationRequested)
+                {
+                    wasCancelled = true;
+                    ConversionStatus = "⚠️ Отменено пользователем";
+                    Logger.LogInfo($"Batch: конвертация отменена на файле {i + 1}");
+                    break;
+                }
+
+                CurrentFileIndex = i + 1;
+                CurrentFileName = Path.GetFileName(SelectedFiles[i]);
+                CurrentFileProgress = 0;
+                ConversionStatus = $"Обработка файла {CurrentFileIndex} из {SelectedFiles.Count}...";
+
+                if (i % 10 == 0 || i == SelectedFiles.Count - 1)
+                {
+                    BatchProgress = Math.Min(100, Math.Max(0, (int)((double)CurrentFileIndex / SelectedFiles.Count * 100)));
+                }
+
+                try { await InvokeAsync(StateHasChanged); } catch { }
+                await Task.Delay(1);
+
+                try
+                {
+                    var safeFileName = string.Join("_", Path.GetFileNameWithoutExtension(SelectedFiles[i]).Split(Path.GetInvalidFileNameChars()));
+                    if (safeFileName.Length > 100) safeFileName = safeFileName.Substring(0, 100);
+
+                    var fileExt = Path.GetExtension(SelectedFiles[i]);
+                    var fileType = GetFileType(fileExt);
+
+                    string outExt = fileType switch
+                    {
+                        "audio" => AudioOutputFormat,
+                        "image" => ImageOutputFormat,
+                        "video" => VideoOutputFormat,
+                        _ => "bin"
+                    };
+
+                    var outputPath = Path.Combine(OutputPath, safeFileName + "." + outExt);
+
+                    if (outputPath.Length > 250)
+                    {
+                        var maxNameLength = 250 - OutputPath.Length - outExt.Length - 2;
+                        if (maxNameLength < 10) maxNameLength = 10;
+                        safeFileName = safeFileName.Substring(0, Math.Min(safeFileName.Length, maxNameLength));
+                        outputPath = Path.Combine(OutputPath, safeFileName + "." + outExt);
+                    }
+
+                    // 🛡️ ВАЖНО: проверяем что outputPath в OutputPath
+                    if (!Path.GetFullPath(outputPath).StartsWith(Path.GetFullPath(OutputPath), StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException("Путь вывода находится вне выбранной папки!");
+                    }
+
+                    var startTime = DateTime.Now;
+
+                    if (fileType == "audio")
+                        await ConvertAudioFile(ffmpegPath, SelectedFiles[i], outputPath);
+                    else if (fileType == "image")
+                        await ConvertImageFile(SelectedFiles[i], outputPath);
+                    else if (fileType == "video")
+                        await ConvertVideoFile(ffmpegPath, SelectedFiles[i], outputPath);
+                    else
+                        throw new InvalidOperationException($"Неподдерживаемый тип файла: {fileExt}");
+
+                    var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
+                    if (elapsed < 100)
+                    {
+                        CurrentFileProgress = 100;
+                        try { await InvokeAsync(StateHasChanged); } catch { }
+                        await Task.Delay(50);
+                    }
+
+                    ConversionResults.Add(new ConversionResult
+                    {
+                        FilePath = SelectedFiles[i],
+                        OutputPath = outputPath,
+                        Success = true,
+                        Message = "Успешно"
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    wasCancelled = true;
+                    Logger.LogInfo($"Batch: отмена на файле {Path.GetFileName(SelectedFiles[i])}");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    // 🛡️ НЕ прерываем при ошибке одного файла
+                    Logger.LogError($"Ошибка конвертации {SelectedFiles[i]}", ex);
+                    ConversionResults.Add(new ConversionResult
+                    {
+                        FilePath = SelectedFiles[i],
+                        Success = false,
+                        Message = ex.Message.Length > 150 ? ex.Message.Substring(0, 150) + "..." : ex.Message
+                    });
+                }
+
+                if (i % 10 == 0 || i == SelectedFiles.Count - 1)
+                {
+                    BatchProgress = Math.Min(100, Math.Max(0, (int)((double)CurrentFileIndex / SelectedFiles.Count * 100)));
+                    try { await InvokeAsync(StateHasChanged); } catch { }
+                }
+            }
+
+            var successCount = ConversionResults.Count(r => r.Success);
+            var failCount = ConversionResults.Count(r => !r.Success);
+
+            if (wasCancelled)
+            {
+                await ShowNotification($"⚠️ Конвертация отменена\n\nУспешно: {successCount}\nОшибок: {failCount}", NotificationType.Warning);
+            }
+            else if (successCount > 0)
+            {
+                await ShowNotification($"✅ Конвертация завершена!\n\nУспешно: {successCount}\nОшибок: {failCount}\n\nПапка: {OutputPath}", NotificationType.Success);
+            }
+            else
+            {
+                await ShowNotification($"❌ Все файлы завершились ошибкой!", NotificationType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Критическая ошибка пакетной конвертации", ex);
+            await ShowNotification($"Критическая ошибка: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            IsConverting = false;
+            BatchProgress = wasCancelled ? BatchProgress : 100;
+
+            try { Cts?.Dispose(); } catch { }
+            Cts = null;
+
+            // 🛡️ Чистим temp ТОЛЬКО если не было отмены
+            if (!wasCancelled)
+            {
+                CleanupAllTempFiles();
+            }
+            else
+            {
+                Logger.LogInfo("Batch: отмена — временные файлы сохранены");
+            }
+
+            try { await InvokeAsync(StateHasChanged); } catch { }
+        }
+    }
+
+    private async Task ConvertAudioFile(string ffmpegPath, string inputFile, string outputFile)
+    {
+        await AudioService.ConvertAsync(ffmpegPath, inputFile, outputFile, TimeSpan.Zero,
+            new Progress<int>(p =>
+            {
+                if (Cts?.IsCancellationRequested ?? true) return;
+                CurrentFileProgress = Math.Max(0, Math.Min(100, p));
+                try { InvokeAsync(StateHasChanged); } catch { }
+            }),
+            Cts!.Token);
+
+        if (!(Cts?.IsCancellationRequested ?? false))
+            CleanupTempFile(inputFile);
+    }
+
+    private async Task ConvertImageFile(string inputFile, string outputFile)
+    {
+        if (inputFile.Length > 240)
+            throw new InvalidOperationException($"Путь слишком длинный ({inputFile.Length} символов).");
+
+        if (!File.Exists(inputFile))
+            throw new FileNotFoundException($"Файл не найден: {inputFile}");
+
+        var fileInfo = new FileInfo(inputFile);
+        if (fileInfo.Length == 0)
+            throw new InvalidOperationException("Файл пустой (0 байт)");
+
+        if (fileInfo.Length > 500L * 1024 * 1024)
+            throw new InvalidOperationException($"Файл слишком большой ({FormatFileSize(fileInfo.Length)})");
+
+        try
+        {
+            CurrentFileProgress = 10;
+            try { InvokeAsync(StateHasChanged); } catch { }
+
+            var options = new ImageConversionOptions
+            {
+                OutputFormat = ImageOutputFormat,
+                Quality = ImageQuality,
+                ResizeEnabled = ResizeImages,
+                Width = ImageWidth,
+                Height = ImageHeight,
+                KeepAspectRatio = KeepAspectRatio,
+                OptimizeSize = OptimizeImages
+            };
+
+            CurrentFileProgress = 30;
+            try { InvokeAsync(StateHasChanged); } catch { }
+
+            byte[] data;
+            try
+            {
+                data = await ImageService.ConvertAdvancedAsync(inputFile, options);
+            }
+            catch (ImageMagick.MagickCoderErrorException ex) when (
+                ex.Message.Contains("iCCP", StringComparison.OrdinalIgnoreCase) ||
+                ex.Message.Contains("profile", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.LogWarning($"Batch: iCCP ошибка в {Path.GetFileName(inputFile)}, пробуем без профиля");
+                CurrentFileProgress = 50;
+                try { InvokeAsync(StateHasChanged); } catch { }
+                data = await ConvertImageWithStripProfile(inputFile, options);
+            }
+
+            if (Cts?.IsCancellationRequested ?? false)
+                throw new OperationCanceledException(Cts.Token);
+
+            CurrentFileProgress = 85;
+            try { InvokeAsync(StateHasChanged); } catch { }
+
+            await File.WriteAllBytesAsync(outputFile, data, Cts!.Token);
+
+            CurrentFileProgress = 100;
+            try { InvokeAsync(StateHasChanged); } catch { }
+        }
+        catch (ImageMagick.MagickMissingDelegateErrorException ex)
+        {
+            throw new InvalidOperationException($"Формат не поддерживается: {ex.Message}");
+        }
+        catch (ImageMagick.MagickException ex)
+        {
+            throw new InvalidOperationException($"Ошибка ImageMagick: {ex.Message}");
+        }
+
+        if (!(Cts?.IsCancellationRequested ?? false))
+            CleanupTempFile(inputFile);
+    }
+
+    private Task<byte[]> ConvertImageWithStripProfile(string inputPath, ImageConversionOptions options)
+    {
+        return Task.Run(() =>
+        {
+            var settings = new ImageMagick.MagickReadSettings
+            {
+                ColorSpace = ImageMagick.ColorSpace.sRGB
+            };
+
+            using var image = new ImageMagick.MagickImage(inputPath, settings);
+            image.Strip();
+            image.ColorSpace = ImageMagick.ColorSpace.sRGB;
+
+            if (options.ResizeEnabled)
+            {
+                if (options.KeepAspectRatio)
+                {
+                    image.Resize(new ImageMagick.MagickGeometry((uint)options.Width, (uint)options.Height)
+                    {
+                        IgnoreAspectRatio = false
+                    });
+                }
+                else
+                {
+                    image.Resize((uint)options.Width, (uint)options.Height);
+                }
+            }
+
+            image.Quality = (uint)options.Quality;
+
+            var format = options.OutputFormat.ToLower() switch
+            {
+                "png" => ImageMagick.MagickFormat.Png,
+                "jpg" or "jpeg" => ImageMagick.MagickFormat.Jpeg,
+                "webp" => ImageMagick.MagickFormat.WebP,
+                "avif" => ImageMagick.MagickFormat.Avif,
+                "bmp" => ImageMagick.MagickFormat.Bmp,
+                "tiff" or "tif" => ImageMagick.MagickFormat.Tiff,
+                "gif" => ImageMagick.MagickFormat.Gif,
+                "ico" => ImageMagick.MagickFormat.Icon,
+                _ => ImageMagick.MagickFormat.Png
+            };
+
+            if (format == ImageMagick.MagickFormat.Icon)
+            {
+                const int maxIconSize = 256;
+                if (image.Width > maxIconSize || image.Height > maxIconSize)
+                {
+                    image.FilterType = ImageMagick.FilterType.Lanczos;
+                    image.Resize(new ImageMagick.MagickGeometry((uint)maxIconSize, (uint)maxIconSize)
+                    {
+                        IgnoreAspectRatio = false
+                    });
+                }
+                image.Format = ImageMagick.MagickFormat.Icon;
+            }
+
+            using var ms = new MemoryStream();
+            image.Format = format;
+            image.Write(ms);
+            return ms.ToArray();
+        });
+    }
+
+    private async Task ConvertVideoFile(string ffmpegPath, string inputFile, string outputFile)
+    {
+        await VideoService.ConvertAsync(
+            ffmpegPath: ffmpegPath,
+            inputFile: inputFile,
+            outputFile: outputFile,
+            outputFormat: VideoOutputFormat,
+            videoCodec: VideoCodec,
+            crf: VideoCrf,
+            preset: VideoPreset,
+            resolution: VideoResolution,
+            audioBitrate: VideoAudioBitrate,
+            hwAccel: null,
+            fps: string.IsNullOrEmpty(VideoFps) ? null : VideoFps,
+            progress: new Progress<int>(p =>
+            {
+                if (Cts?.IsCancellationRequested ?? true) return;
+                CurrentFileProgress = Math.Max(0, Math.Min(100, p));
+                try { InvokeAsync(StateHasChanged); } catch { }
+            }),
+            token: Cts!.Token);
+
+        if (!(Cts?.IsCancellationRequested ?? false))
+            CleanupTempFile(inputFile);
+    }
+
+    private void CleanupTempFile(string filePath)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(filePath)) return;
+            if (!File.Exists(filePath)) return;
+
+            // 🛡️ ЗАЩИТА: НЕ удаляем если файл в OutputPath
+            try
+            {
+                var normalizedFile = Path.GetFullPath(filePath);
+                var normalizedOutput = Path.GetFullPath(OutputPath);
+
+                if (normalizedFile.StartsWith(normalizedOutput, StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.LogWarning($"Batch: пропущено удаление — файл в OutputPath: {Path.GetFileName(filePath)}");
+                    return;
+                }
+            }
+            catch { }
+
+            if (filePath.Contains("DazzConv_Batch"))
+            {
+                File.Delete(filePath);
+                Logger.LogInfo($"Batch: удалён временный файл {Path.GetFileName(filePath)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Batch: не удалось удалить temp файл: {ex.Message}");
+        }
+    }
+
+    private void CleanupAllTempFiles()
+    {
+        try
+        {
+            var tempFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Batch");
+
+            if (!Directory.Exists(tempFolder)) return;
+
+            // 🛡️ ЗАЩИТА: НЕ чистим если OutputPath совпадает с temp папкой
+            try
+            {
+                var normalizedTemp = Path.GetFullPath(tempFolder);
+                var normalizedOutput = Path.GetFullPath(OutputPath);
+
+                if (normalizedTemp.Equals(normalizedOutput, StringComparison.OrdinalIgnoreCase) ||
+                    normalizedOutput.StartsWith(normalizedTemp + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.LogWarning("Batch: пропущена очистка — OutputPath находится внутри temp папки!");
+                    return;
+                }
+            }
+            catch { }
+
+            var files = Directory.GetFiles(tempFolder);
+            var deletedCount = 0;
+
+            foreach (var file in files)
+            {
+                try
+                {
+                    File.Delete(file);
+                    deletedCount++;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"Batch: не удалось удалить {Path.GetFileName(file)}: {ex.Message}");
+                }
+            }
+
+            if (deletedCount > 0)
+            {
+                Logger.LogInfo($"Batch: массовая очистка - удалено {deletedCount} временных файлов");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Batch: ошибка массовой очистки: {ex.Message}");
+        }
+    }
+
+
+    private void CancelBatchConversion()
+    {
+        try
+        {
+            if (Cts != null && !Cts.IsCancellationRequested)
+            {
+                Cts.Cancel();
+                ConversionStatus = "⚠️ Отмена...";
+                Logger.LogInfo("Batch: запрошена отмена конвертации");
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Batch: ошибка отмены", ex);
+        }
+    }
+
+    // ===== Вспомогательные методы =====
+    private string GetOutputExtension() => BatchType switch
+    {
+        "audio" => AudioOutputFormat,
+        "image" => ImageOutputFormat,
+        "video" => VideoOutputFormat,
+        _ => "bin"
+    };
+
+    private string GetFileIcon(string filePath)
+    {
+        var ext = Path.GetExtension(filePath).ToLower();
+        return ext switch
+        {
+            ".mp3" or ".wav" or ".flac" or ".ogg" or ".aac" or ".opus" or ".m4a" or ".wma" or ".ac3" or ".aiff" => "bi-music-note-beamed",
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" or ".avif" or ".tiff" or ".ico" or ".heic" or ".raw" => "bi-image",
+            ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" or ".flv" or ".webm" or ".m4v" or ".mpeg" or ".mpg" => "bi-camera-video",
+            _ => "bi-file-earmark"
+        };
+    }
+
+    private string GetFileExtension(string filePath) => Path.GetExtension(filePath).TrimStart('.');
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 Б";
+        const long kb = 1024, mb = kb * 1024, gb = mb * 1024;
+        if (bytes >= gb) return $"{(bytes / (double)gb):F2} ГБ";
+        if (bytes >= mb) return $"{(bytes / (double)mb):F2} МБ";
+        if (bytes >= kb) return $"{(bytes / (double)kb):F2} КБ";
+        return $"{bytes} Б";
+    }
+
+    private void OpenFile(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath))
+        {
+            Logger.LogWarning("Batch: путь к файлу пустой");
+            return;
+        }
+
+        if (!File.Exists(filePath))
+        {
+            Logger.LogWarning($"Batch: файл не существует - {filePath}");
+            _ = ShowNotification("⚠️ Файл не найден", NotificationType.Warning);
+
+            // Fallback — открываем папку вывода
+            if (!string.IsNullOrEmpty(OutputPath) && Directory.Exists(OutputPath))
+            {
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = OutputPath,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+                catch { }
+            }
+            return;
+        }
+
+        try
+        {
+            // Нормализуем путь (заменяем / на \)
+            var normalizedPath = Path.GetFullPath(filePath).Replace('/', '\\');
+            var arguments = "/select,\"" + normalizedPath + "\"";
+
+            Logger.LogInfo($"Batch: открываем папку с выделением файла: {normalizedPath}");
+            Logger.LogInfo($"Batch: аргументы explorer: {arguments}");
+
+            // ИСПРАВЛЕНО: UseShellExecute = true — иначе аргументы игнорируются в MAUI WebView2
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = arguments,
+                UseShellExecute = true   // ← ИСПРАВЛЕНО! Было false
+            };
+
+            System.Diagnostics.Process.Start(psi);
+            Logger.LogInfo($"Batch: команда выполнена");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Batch: ошибка открытия папки с файлом {filePath}", ex);
+
+            // Fallback — просто открываем папку
+            try
+            {
+                var folder = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(folder))
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = folder,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+            }
+            catch { }
+        }
+    }
+
+    // ===== Уведомления =====
+    private async Task ShowNotification(string message, NotificationType type)
+    {
+        CurrentNotification = new NotificationMessage
+        {
+            Message = message,
+            Type = type
+        };
+        StateHasChanged();
+
+        await Task.Delay(5000);
+        CurrentNotification = null;
+        StateHasChanged();
+    }
+}

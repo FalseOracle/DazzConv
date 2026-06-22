@@ -1,0 +1,16 @@
+﻿<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <div class="alert alert-danger">
+                <h3>Страница не найдена</h3>
+                <p>Извините, но страница не существует.</p>
+                <a href="/" class="btn btn-primary">На главную</a>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>

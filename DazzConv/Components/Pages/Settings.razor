@@ -1,0 +1,739 @@
+﻿@page "/settings"
+@using DazzConv.Services
+@inject UpdateService UpdateService
+@inject LoggerService Logger
+
+<PageTitle>Настройки — DazzConv</PageTitle>
+
+<div class="settings-container">
+    <!-- Заголовок -->
+    <div class="settings-header mb-4">
+        <div class="d-flex align-items-center">
+            <div class="icon-wrapper me-3">
+                <i class="bi bi-gear-fill"></i>
+            </div>
+            <div>
+                <h2 class="mb-1">Настройки</h2>
+                <p class="mb-0 text-muted">Управление обновлениями и информация о приложении</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Карточка обновлений -->
+    <div class="card modern-card mb-4 fade-in">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h5 class="mb-0">
+                <i class="bi bi-arrow-clockwise me-2 text-primary"></i>Обновления
+            </h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <!-- Версии -->
+            <div class="version-info mb-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="info-box">
+                            <div class="info-label">
+                                <i class="bi bi-box me-2"></i>Текущая версия
+                            </div>
+                            <div class="info-value">
+                                <span class="badge bg-primary-subtle text-primary fs-6">
+                                    @UpdateService.CurrentVersion
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_latestVersion))
+                    {
+                        <div class="col-md-6">
+                            <div class="info-box success">
+                                <div class="info-label">
+                                    <i class="bi bi-stars me-2"></i>Последняя версия
+                                </div>
+                                <div class="info-value">
+                                    <span class="badge bg-success-subtle text-success fs-6">
+                                        @_latestVersion
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Статус проверки -->
+            @if (_isChecking)
+            {
+                <div class="action-area text-center py-4">
+                    <div class="spinner-wrapper mb-3">
+                        <div class="spinner-border spinner-primary" role="status">
+                            <span class="visually-hidden">Проверка...</span>
+                        </div>
+                    </div>
+                    <p class="text-muted mb-0">Проверяем наличие обновлений...</p>
+                </div>
+            }
+            else if (_updateAvailable && _pendingUpdate != null)
+            {
+                <div class="update-available-box mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="update-icon me-3">
+                            <i class="bi bi-gift-fill"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">🎉 Доступно обновление!</h6>
+                            <p class="mb-0 text-muted small">
+                                Новая версия <strong>@_latestVersion</strong> готова к установке.
+                                Приложение обновится автоматически и перезапустится.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-install-update w-100" @onclick="InstallUpdate">
+                    <i class="bi bi-download me-2"></i>
+                    Установить обновление
+                    <i class="bi bi-arrow-right ms-2"></i>
+                </button>
+            }
+            else if (_wasChecked && !_updateAvailable)
+            {
+                <div class="update-current-box mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="check-icon me-3">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">У вас последняя версия</h6>
+                            <p class="mb-0 text-muted small">
+                                Вы используете самую актуальную версию DazzConv.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-outline-primary w-100" @onclick="CheckForUpdates">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Проверить ещё раз
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-check-update w-100" @onclick="CheckForUpdates">
+                    <i class="bi bi-search me-2"></i>
+                    Проверить наличие обновлений
+                </button>
+            }
+
+            @* Сообщение об ошибке *@
+            @if (!string.IsNullOrEmpty(_statusMessage) && _isError)
+            {
+                <div class="alert alert-danger mt-3 mb-0 fade-in">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    @_statusMessage
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Карточка о программе -->
+    <div class="card modern-card mb-4 fade-in delay-1">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h5 class="mb-0">
+                <i class="bi bi-info-circle me-2 text-info"></i>О программе
+            </h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <div class="about-section mb-3">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="app-logo me-3">
+                        <span class="logo-text">D</span>
+                    </div>
+                    <div>
+                        <h5 class="mb-0 app-name">DazzConv</h5>
+                        <small class="text-muted">Универсальный конвертер медиа файлов</small>
+                    </div>
+                </div>
+
+                <div class="features-list">
+                    <div class="feature-item">
+                        <div class="feature-icon audio">
+                            <i class="bi bi-music-note-beamed"></i>
+                        </div>
+                        <div>
+                            <div class="feature-name">Аудио конвертер</div>
+                            <small class="text-muted">MP3, WAV, FLAC, OGG, AAC, OPUS</small>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon image">
+                            <i class="bi bi-image"></i>
+                        </div>
+                        <div>
+                            <div class="feature-name">Конвертер изображений</div>
+                            <small class="text-muted">JPG, PNG, WebP, AVIF, BMP, TIFF</small>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon video">
+                            <i class="bi bi-camera-video"></i>
+                        </div>
+                        <div>
+                            <div class="feature-name">Видео конвертер</div>
+                            <small class="text-muted">MP4, MKV, AVI, MOV • H.264/H.265/VP9</small>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon batch">
+                            <i class="bi bi-layers"></i>
+                        </div>
+                        <div>
+                            <div class="feature-name">Пакетная конвертация</div>
+                            <small class="text-muted">Тысячи файлов одновременно</small>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon download">
+                            <i class="bi bi-cloud-download"></i>
+                        </div>
+                        <div>
+                            <div class="feature-name">Загрузчик видео</div>
+                            <small class="text-muted">1800+ сайтов: YouTube, TikTok, Reddit...</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-3" />
+
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="https://github.com/FalseOracle/DazzConv" target="_blank" class="github-link">
+                    <i class="bi bi-github me-2"></i>GitHub проекта
+                </a>
+                <small class="text-muted">© 2026 FalseOracle</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Автообновления -->
+    <div class="card modern-card fade-in delay-2">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h5 class="mb-0">
+                <i class="bi bi-shield-check me-2 text-success"></i>Автообновления
+            </h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <div class="autoupdate-info">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-info-circle-fill text-info me-3 mt-1"></i>
+                    <div>
+                        <p class="mb-2"><strong>Как это работает:</strong></p>
+                        <ul class="mb-0 small text-muted">
+                            <li>При запуске приложение автоматически проверяет наличие новых версий</li>
+                            <li>Если доступно обновление — появится уведомление с предложением установить</li>
+                            <li>Обновление применяется автоматически, приложение перезапускается</li>
+                            <li>Ваши настройки и история загрузок сохраняются</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .settings-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+    }
+
+    .settings-header {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        border-left: 5px solid #667eea;
+    }
+
+        .settings-header .icon-wrapper {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+        }
+
+    body.dark-theme .settings-header h2 {
+        color: #fff;
+    }
+
+    /* Modern cards */
+    .modern-card {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        background: white;
+        overflow: visible;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    body.dark-theme .modern-card {
+        background: #1e1e2e;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .modern-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.12);
+    }
+
+    body.dark-theme .modern-card:hover {
+        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Animations */
+    .fade-in {
+        animation: fadeInUp 0.5s ease-out;
+    }
+
+    .delay-1 {
+        animation-delay: 0.1s;
+        animation-fill-mode: both;
+    }
+
+    .delay-2 {
+        animation-delay: 0.2s;
+        animation-fill-mode: both;
+    }
+
+    @@keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Version info */
+    .info-box {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+    }
+
+        .info-box.success {
+            background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(40, 167, 69, 0.08) 100%);
+            border-color: rgba(25, 135, 84, 0.2);
+        }
+
+    body.dark-theme .info-box {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+        border-color: rgba(102, 126, 234, 0.3);
+    }
+
+        body.dark-theme .info-box.success {
+            background: linear-gradient(135deg, rgba(25, 135, 84, 0.15) 0%, rgba(40, 167, 69, 0.15) 100%);
+            border-color: rgba(25, 135, 84, 0.3);
+        }
+
+    .info-label {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 0.5rem;
+    }
+
+    body.dark-theme .info-label {
+        color: #aaa;
+    }
+
+    .info-value {
+        font-weight: 600;
+    }
+
+    /* Spinner */
+    .spinner-wrapper {
+        display: flex;
+        justify-content: center;
+    }
+
+    .spinner-primary {
+        color: #667eea;
+        width: 3rem;
+        height: 3rem;
+    }
+
+    /* Update boxes */
+    .update-available-box,
+    .update-current-box {
+        background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(40, 167, 69, 0.08) 100%);
+        border: 1px solid rgba(25, 135, 84, 0.2);
+        border-radius: 12px;
+        padding: 1.25rem;
+    }
+
+    .update-current-box {
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(102, 126, 234, 0.08) 100%);
+        border-color: rgba(13, 110, 253, 0.2);
+    }
+
+    body.dark-theme .update-available-box {
+        background: linear-gradient(135deg, rgba(25, 135, 84, 0.15) 0%, rgba(40, 167, 69, 0.15) 100%);
+        border-color: rgba(25, 135, 84, 0.3);
+    }
+
+    body.dark-theme .update-current-box {
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.15) 0%, rgba(102, 126, 234, 0.15) 100%);
+        border-color: rgba(13, 110, 253, 0.3);
+    }
+
+    .update-icon,
+    .check-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .update-icon {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+    }
+
+    .check-icon {
+        background: linear-gradient(135deg, #0d6efd 0%, #667eea 100%);
+        color: white;
+    }
+
+    .update-available-box h6,
+    .update-current-box h6 {
+        color: #1a1a1a;
+    }
+
+    body.dark-theme .update-available-box h6,
+    body.dark-theme .update-current-box h6 {
+        color: #fff;
+    }
+
+    /* Buttons */
+    .btn-check-update {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.875rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+        .btn-check-update:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+
+    .btn-install-update {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border: none;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 1.05rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
+
+        .btn-install-update:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+            color: white;
+        }
+
+        .btn-install-update i.bi-arrow-right {
+            transition: transform 0.3s ease;
+        }
+
+        .btn-install-update:hover i.bi-arrow-right {
+            transform: translateX(5px);
+        }
+
+    /* About section */
+    .app-logo {
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .logo-text {
+        color: white;
+        font-size: 1.75rem;
+        font-weight: 700;
+    }
+
+    .app-name {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+    }
+
+    /* Features list */
+    .features-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.875rem 1rem;
+        background: rgba(102, 126, 234, 0.04);
+        border-radius: 10px;
+        transition: all 0.2s ease;
+    }
+
+        .feature-item:hover {
+            background: rgba(102, 126, 234, 0.08);
+            transform: translateX(4px);
+        }
+
+    body.dark-theme .feature-item {
+        background: rgba(102, 126, 234, 0.08);
+    }
+
+        body.dark-theme .feature-item:hover {
+            background: rgba(102, 126, 234, 0.15);
+        }
+
+    .feature-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+        .feature-icon.audio {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .feature-icon.image {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .feature-icon.video {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+        }
+
+        .feature-icon.batch {
+            background: linear-gradient(135deg, #0dcaf0 0%, #0d6efd 100%);
+        }
+
+        .feature-icon.download {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+
+    .feature-name {
+        font-weight: 600;
+        margin-bottom: 0.125rem;
+    }
+
+    body.dark-theme .feature-name {
+        color: #fff;
+    }
+
+    /* GitHub link */
+    .github-link {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        background: rgba(102, 126, 234, 0.08);
+    }
+
+        .github-link:hover {
+            background: rgba(102, 126, 234, 0.15);
+            color: #764ba2;
+            transform: translateY(-1px);
+        }
+
+    body.dark-theme .github-link {
+        color: #7aa2f7;
+        background: rgba(122, 162, 247, 0.1);
+    }
+
+        body.dark-theme .github-link:hover {
+            background: rgba(122, 162, 247, 0.2);
+            color: #9bb8ff;
+        }
+
+    /* Autoupdate info */
+    .autoupdate-info {
+        background: rgba(13, 202, 240, 0.05);
+        border-radius: 10px;
+        padding: 1rem;
+    }
+
+    body.dark-theme .autoupdate-info {
+        background: rgba(13, 202, 240, 0.1);
+    }
+
+    .autoupdate-info ul {
+        padding-left: 1.25rem;
+    }
+
+    .autoupdate-info li {
+        margin-bottom: 0.375rem;
+    }
+
+    /* Dark theme text */
+    body.dark-theme .settings-container p,
+    body.dark-theme .settings-container h5,
+    body.dark-theme .settings-container h6 {
+        color: #e0e0e0;
+    }
+
+    body.dark-theme .text-muted {
+        color: #aaa !important;
+    }
+
+    /* Alerts in dark theme */
+    body.dark-theme .alert-danger {
+        background-color: #842029 !important;
+        border-color: #b02a37 !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-theme hr {
+        border-color: #3a3a5a;
+    }
+
+    /* Fix badge visibility in dark theme */
+    body.dark-theme .badge.bg-primary-subtle {
+        background: rgba(122, 162, 247, 0.2) !important;
+        color: #7aa2f7 !important;
+        border: 1px solid rgba(122, 162, 247, 0.3);
+    }
+
+    body.dark-theme .badge.bg-success-subtle {
+        background: rgba(166, 227, 161, 0.2) !important;
+        color: #a6e3a1 !important;
+        border: 1px solid rgba(166, 227, 161, 0.3);
+    }
+
+    /* Responsive */
+    @@media (max-width: 576px) {
+        .settings-header {
+            padding: 1.5rem;
+        }
+
+            .settings-header .icon-wrapper {
+                width: 48px;
+                height: 48px;
+                font-size: 1.5rem;
+            }
+
+        .modern-card .card-header,
+        .modern-card .card-body {
+            padding-left: 1.25rem !important;
+            padding-right: 1.25rem !important;
+        }
+
+        .feature-item {
+            padding: 0.75rem;
+        }
+    }
+</style>
+
+@code {
+    private bool _isChecking = false;
+    private bool _updateAvailable = false;
+    private bool _wasChecked = false;
+    private bool _isError = false;
+    private string? _latestVersion;
+    private string? _statusMessage;
+    private Velopack.UpdateInfo? _pendingUpdate;
+
+    private async Task CheckForUpdates()
+    {
+        _isChecking = true;
+        _statusMessage = null;
+        _isError = false;
+        _updateAvailable = false;
+        _pendingUpdate = null;
+        _wasChecked = false;
+
+        try
+        {
+            var update = await UpdateService.CheckForUpdateAsync();
+
+            if (update != null)
+            {
+                _pendingUpdate = update;
+                _latestVersion = update.TargetFullRelease.Version.ToString();
+                _updateAvailable = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _isError = true;
+            _statusMessage = $"Ошибка проверки: {ex.Message}";
+            Logger.LogError("Ошибка проверки обновлений", ex);
+        }
+        finally
+        {
+            _isChecking = false;
+            _wasChecked = true;
+        }
+    }
+
+    private async Task InstallUpdate()
+    {
+        if (_pendingUpdate == null) return;
+
+        _statusMessage = "Загрузка обновления... Приложение перезапустится автоматически.";
+        _isChecking = true;
+
+        try
+        {
+            var success = await UpdateService.DownloadAndInstallAsync(_pendingUpdate);
+            if (!success)
+            {
+                _isError = true;
+                _statusMessage = "Не удалось установить обновление. Попробуйте позже.";
+                _isChecking = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _isError = true;
+            _statusMessage = $"Ошибка: {ex.Message}";
+            _isChecking = false;
+        }
+    }
+}

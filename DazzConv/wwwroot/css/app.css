@@ -1,0 +1,395 @@
+﻿/* ===== БАЗОВЫЕ СТИЛИ ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    /* Убираем выделение текста */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Разрешаем выделение только в полях ввода */
+input, textarea, select, [contenteditable="true"] {
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+}
+
+/* Убираем outline у всех элементов */
+*:focus {
+    outline: none !important;
+}
+
+/* Добавляем красивую обводку только для интерактивных элементов */
+input:focus, textarea:focus, select:focus, button:focus {
+    outline: 2px solid rgba(102, 126, 234, 0.5) !important;
+    outline-offset: 2px !important;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    /* Предотвращаем мерцание при загрузке */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== LAYOUT ===== */
+.app-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+    width: 280px;
+    background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
+    position: fixed;
+    height: 100vh;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: 2rem 1.5rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+}
+
+.brand {
+    color: white;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    font-size: 1.05rem;
+    /* Убираем выделение */
+    -webkit-tap-highlight-color: transparent;
+}
+
+    .nav-item:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        transform: translateX(8px);
+    }
+
+    .nav-item.active {
+        background: rgba(255, 255, 255, 0.25);
+        color: white;
+        font-weight: 600;
+    }
+
+    .nav-item i {
+        font-size: 1.4rem;
+        width: 28px;
+    }
+
+/* ===== MAIN CONTENT ===== */
+.main-content {
+    margin-left: 280px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.top-bar {
+    background: rgba(255, 255, 255, 0.98);
+    padding: 1.25rem 2.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.page-title {
+    font-size: 1.75rem;
+    color: #1e3c72;
+    margin: 0;
+}
+
+.theme-toggle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+    .theme-toggle:hover {
+        transform: rotate(180deg) scale(1.15);
+    }
+
+.content-area {
+    flex: 1;
+    padding: 2.5rem;
+    background: rgba(255, 255, 255, 0.97);
+    margin: 1.5rem;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+/* ===== DARK THEME ===== */
+body.dark-theme {
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+}
+
+    body.dark-theme .sidebar {
+        background: linear-gradient(180deg, #0f0c29 0%, #302b63 100%);
+    }
+
+    body.dark-theme .top-bar {
+        background: rgba(30, 30, 50, 0.98);
+    }
+
+    body.dark-theme .page-title {
+        color: #a0a0ff;
+    }
+
+    body.dark-theme .content-area {
+        background: rgba(30, 30, 50, 0.97);
+        color: #e0e0e0;
+    }
+
+    body.dark-theme .card {
+        background: rgba(40, 40, 70, 0.9) !important;
+        border-color: #4a4a7a !important;
+        color: #e0e0e0 !important;
+    }
+
+    body.dark-theme .card-header {
+        background: rgba(50, 50, 90, 0.95) !important;
+        color: #fff !important;
+    }
+
+    body.dark-theme .form-control,
+    body.dark-theme .form-select {
+        background: rgba(40, 40, 70, 0.9) !important;
+        border-color: #4a4a7a !important;
+        color: #e0e0e0 !important;
+    }
+
+    body.dark-theme .form-label,
+    body.dark-theme label,
+    body.dark-theme strong,
+    body.dark-theme span,
+    body.dark-theme p,
+    body.dark-theme h1,
+    body.dark-theme h2,
+    body.dark-theme h3,
+    body.dark-theme h4,
+    body.dark-theme h5,
+    body.dark-theme h6,
+    body.dark-theme td,
+    body.dark-theme th {
+        color: #e0e0e0 !important;
+    }
+
+    body.dark-theme .table {
+        color: #e0e0e0 !important;
+    }
+
+    body.dark-theme .table-bordered th,
+    body.dark-theme .table-bordered td {
+        border-color: #4a4a7a !important;
+    }
+
+    body.dark-theme .alert-info {
+        background: rgba(50, 80, 120, 0.9) !important;
+        border-color: #4a6fa5 !important;
+        color: #fff !important;
+    }
+
+    body.dark-theme .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        border-color: #667eea !important;
+        color: white !important;
+    }
+
+    body.dark-theme .btn-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+        border-color: #38ef7d !important;
+        color: white !important;
+    }
+
+    body.dark-theme .btn-danger {
+        background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%) !important;
+        border-color: #eb3349 !important;
+        color: white !important;
+    }
+
+    body.dark-theme .text-muted {
+        color: #a0a0c0 !important;
+    }
+
+    body.dark-theme .progress {
+        background: rgba(40, 40, 70, 0.9) !important;
+    }
+
+    body.dark-theme .progress-bar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+
+    /* ===== ИСПРАВЛЕНИЕ МЕЛКИХ ТЕКСТОВ В ТЁМНОЙ ТЕМЕ ===== */
+    body.dark-theme input::placeholder,
+    body.dark-theme textarea::placeholder,
+    body.dark-theme .form-control::placeholder,
+    body.dark-theme .form-select::placeholder {
+        color: #a0a0c0 !important;
+        opacity: 0.8 !important;
+    }
+
+    body.dark-theme .form-text,
+    body.dark-theme small.form-text,
+    body.dark-theme .text-muted {
+        color: #b0b0d0 !important;
+        opacity: 0.9 !important;
+    }
+
+    body.dark-theme .form-check-label,
+    body.dark-theme label.form-check-label {
+        color: #e0e0e0 !important;
+    }
+
+    body.dark-theme label,
+    body.dark-theme .form-label {
+        color: #e8e8ff !important;
+        font-weight: 500;
+    }
+
+    body.dark-theme table,
+    body.dark-theme .table {
+        background: rgba(40, 40, 70, 0.9) !important;
+    }
+
+        body.dark-theme table th,
+        body.dark-theme table td,
+        body.dark-theme .table th,
+        body.dark-theme .table td {
+            background: rgba(40, 40, 70, 0.9) !important;
+            color: #e0e0e0 !important;
+            border-color: #4a4a7a !important;
+        }
+
+        body.dark-theme table thead th,
+        body.dark-theme .table thead th {
+            background: rgba(50, 50, 90, 0.95) !important;
+            color: #fff !important;
+        }
+
+    body.dark-theme .bg-light,
+    body.dark-theme .card.bg-light {
+        background: rgba(40, 40, 70, 0.9) !important;
+    }
+
+    body.dark-theme [style*="background-color: white"],
+    body.dark-theme [style*="background: white"] {
+        background: rgba(40, 40, 70, 0.9) !important;
+    }
+
+    body.dark-theme .d-flex.justify-content-between small,
+    body.dark-theme .form-range + div small {
+        color: #b0b0d0 !important;
+    }
+
+    body.dark-theme small {
+        color: #b0b0d0 !important;
+    }
+
+/* ===== ИСПРАВЛЕНИЕ ВЫДЕЛЕНИЯ И ФОКУСА ===== */
+/* Убираем стандартное выделение синим */
+::selection {
+    background: rgba(102, 126, 234, 0.3);
+}
+
+::-moz-selection {
+    background: rgba(102, 126, 234, 0.3);
+}
+
+/* Убираем outline у кнопок при клике */
+.btn:focus,
+button:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.5) !important;
+}
+
+/* Убираем выделение у ссылок */
+a:focus, a:active {
+    outline: none !important;
+}
+
+/* Убираем стандартное выделение у input */
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    outline: 2px solid rgba(102, 126, 234, 0.5) !important;
+    outline-offset: 2px !important;
+}
+
+/* ===== ДОПОЛНИТЕЛЬНЫЕ ИСПРАВЛЕНИЯ ===== */
+/* Предотвращаем мерцание при прокрутке */
+html, body {
+    overflow-x: hidden;
+}
+
+/* Плавная прокрутка */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Убираем стандартные стили кнопок */
+button, input[type="button"], input[type="submit"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* ===== NAV SECTION TITLE ===== */
+.nav-section-title {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 1rem 1.5rem 0.5rem;
+    margin-top: 1rem;
+    letter-spacing: 0.5px;
+}
+
+body.dark-theme .nav-section-title {
+    color: rgba(255, 255, 255, 0.4);
+}

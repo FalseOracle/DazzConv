@@ -1,0 +1,33 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36811.4
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DazzConv", "DazzConv\DazzConv.csproj", "{520FFB17-F92E-4583-9CD7-65EB55278E26}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConverToDazz.Core", "ConverToDazz.Core\ConverToDazz.Core.csproj", "{F703B3A4-3307-4960-B37C-CDB74F229E40}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{520FFB17-F92E-4583-9CD7-65EB55278E26}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{520FFB17-F92E-4583-9CD7-65EB55278E26}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{520FFB17-F92E-4583-9CD7-65EB55278E26}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{520FFB17-F92E-4583-9CD7-65EB55278E26}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{520FFB17-F92E-4583-9CD7-65EB55278E26}.Release|Any CPU.Build.0 = Release|Any CPU
+		{520FFB17-F92E-4583-9CD7-65EB55278E26}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{F703B3A4-3307-4960-B37C-CDB74F229E40}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F703B3A4-3307-4960-B37C-CDB74F229E40}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F703B3A4-3307-4960-B37C-CDB74F229E40}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F703B3A4-3307-4960-B37C-CDB74F229E40}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9707EA05-94D6-408D-ABC3-52D5B3D24A11}
+	EndGlobalSection
+EndGlobal

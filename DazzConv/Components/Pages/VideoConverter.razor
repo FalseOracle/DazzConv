@@ -1,0 +1,747 @@
+﻿@page "/video"
+@using ConverToDazz.Core.Services
+@using ConverToDazz.Core.Models
+@using DazzConv.Services
+@inject IVideoConverterService VideoService
+@inject VideoInfoService InfoService
+@inject FFmpegPathService FFmpegService
+@inject IJSRuntime JSRuntime
+@inject LoggerService Logger
+@inject HotkeyService Hotkeys
+
+<h3 class="text-center mb-4">Видео Конвертер</h3>
+
+<div class="card mb-4">
+    <div class="card-body text-center">
+        <button class="btn btn-primary btn-lg" @onclick="SelectFile">
+            <i class="bi bi-folder2-open"></i> Выбрать видео файл
+        </button>
+        <p class="text-muted mt-2 mb-0">Поддерживаемые форматы: MP4, AVI, MKV, MOV, WMV, FLV</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(FileName))
+{
+    <div class="row">
+        <!-- Информация о файле -->
+        <div class="col-md-12 mb-4">
+            <div class="card bg-light">
+                <div class="card-header">
+                    <h5 class="mb-0">📹 Информация о файле</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3"><strong>Файл:</strong> @FileName</div>
+                        <div class="col-md-3"><strong>Длительность:</strong> @Duration</div>
+                        <div class="col-md-2"><strong>Кодек:</strong> @Codec</div>
+                        <div class="col-md-2"><strong>Разрешение:</strong> @Resolution</div>
+                        <div class="col-md-2"><strong>FPS:</strong> @Fps</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Основные настройки -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🎬 Видео настройки</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Выходной формат</label>
+                        <select class="form-select" @bind="OutputFormat">
+                            @foreach (var format in Formats)
+                            {
+                                <option value="@format">@format.ToUpper()</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Видео кодек</label>
+                        <select class="form-select" value="@VideoCodec" @onchange="OnCodecChanged">
+                            <option value="libx264">H.264 (libx264)</option>
+                            <option value="libx265">H.265/HEVC (libx265)</option>
+                            <option value="mpeg4">MPEG-4</option>
+                            <option value="h264_nvenc">H.264 NVENC (NVIDIA)</option>
+                            <option value="hevc_nvenc">HEVC NVENC (NVIDIA)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Preset (скорость кодирования)</label>
+                        <select class="form-select" @bind="Preset">
+                            @if (VideoCodec.Contains("nvenc", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="fast">Fast (быстро)</option>
+                                <option value="medium" selected>Medium (баланс)</option>
+                                <option value="slow">Slow (медленно, лучше качество)</option>
+                            }
+                            else
+                            {
+                                <option value="ultrafast">Ultrafast (очень быстро)</option>
+                                <option value="superfast">Superfast</option>
+                                <option value="veryfast">Veryfast</option>
+                                <option value="faster">Faster</option>
+                                <option value="fast">Fast</option>
+                                <option value="medium" selected>Medium (баланс)</option>
+                                <option value="slow">Slow</option>
+                                <option value="slower">Slower</option>
+                                <option value="veryslow">Veryslow (очень медленно, лучшее качество)</option>
+                            }
+                        </select>
+                        @if (VideoCodec.Contains("nvenc", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <div class="form-text text-warning">
+                                ⚠️ NVENC поддерживает только Fast, Medium, Slow
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Разрешение (например: 1920x1080)</label>
+                        <input type="text" class="form-control" @bind="Scale" placeholder="Оставьте пустым для оригинала" />
+                        <div class="form-text">Примеры: 1920x1080, 1280x720, 640x480</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">FPS (кадры в секунду)</label>
+                        <select class="form-select" @bind="FpsOutput">
+                            <option value="">Оригинальный</option>
+                            <option value="24">24 fps (кино)</option>
+                            <option value="25">25 fps (PAL)</option>
+                            <option value="30">30 fps</option>
+                            <option value="59">59 fps</option>
+                            <option value="60">60 fps</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Аудио и качество -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">🎵 Аудио и качество</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Аудио кодек</label>
+                        <select class="form-select" @bind="AudioCodec">
+                            <option value="aac">AAC (рекомендуется)</option>
+                            <option value="libmp3lame">MP3</option>
+                            <option value="pcm_s16le">PCM (без сжатия)</option>
+                            <option value="copy">Копировать (без перекодирования)</option>
+                        </select>
+                    </div>
+
+                    @if (VideoCodec == "libx264" || VideoCodec == "libx265" || VideoCodec.Contains("nvenc"))
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">CRF (качество): @Crf</label>
+                            <input type="range" class="form-range" min="0" max="51" step="1" value="@Crf" @oninput="OnCrfChanged" />
+                            <input type="number" class="form-control mt-2 @(IsValidCrf ? "" : "is-invalid")"
+                                   value="@Crf" @onchange="OnCrfInputChanged" min="0" max="51" />
+                            @if (!IsValidCrf)
+                            {
+                                <div class="invalid-feedback">
+                                    CRF должен быть от 0 до 51
+                                </div>
+                            }
+                            <div class="form-text">
+                                0 = без потерь, 18 = визуально без потерь, 23 = стандарт, 51 = худшее качество
+                            </div>
+                        </div>
+                    }
+
+                    @if (VideoCodec == "mpeg4")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">QScale (качество): @QScale</label>
+                            <input type="range" class="form-range" min="1" max="31" step="1" value="@QScale" @oninput="OnQScaleChanged" />
+                            <div class="form-text">1 = лучшее, 31 = худшее</div>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">Видео битрейт (kbps)</label>
+                        <input type="number"
+                               class="form-control @(IsValidVideoBitrate ? "" : "is-invalid")"
+                               value="@VideoBitrate"
+                               @onchange="OnVideoBitrateChanged"
+                               min="0"
+                               placeholder="3000" />
+                        @if (!IsValidVideoBitrate)
+                        {
+                            <div class="invalid-feedback">
+                                Битрейт должен быть положительным числом
+                            </div>
+                        }
+                        <div class="form-text">Оставьте пустым для использования CRF/QScale</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Аудио битрейт (kbps)</label>
+                        <input type="number"
+                               class="form-control @(IsValidAudioBitrate ? "" : "is-invalid")"
+                               value="@AudioBitrate"
+                               @onchange="OnAudioBitrateChanged"
+                               min="64"
+                               max="320" />
+                        @if (!IsValidAudioBitrate)
+                        {
+                            <div class="invalid-feedback">
+                                Аудио битрейт должен быть от 64 до 320
+                            </div>
+                        }
+                        <div class="form-text">128 = стандарт, 192 = хорошо, 320 = лучшее</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Профили -->
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">💾 Профили настроек</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Новый профиль (имя)</label>
+                            <input type="text" class="form-control" @bind="NewProfileName" placeholder="Введите имя профиля..." />
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button class="btn btn-info me-2" @onclick="SaveProfile" disabled="@string.IsNullOrWhiteSpace(NewProfileName)">
+                                <i class="bi bi-save"></i> Сохранить профиль
+                            </button>
+                            <button class="btn btn-secondary" @onclick="LoadProfiles">
+                                <i class="bi bi-arrow-clockwise"></i> Обновить
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Загрузить профиль</label>
+                            <select class="form-select" @bind="SelectedProfile">
+                                <option value="">-- Выберите профиль --</option>
+                                @foreach (var profile in Profiles)
+                                {
+                                    <option value="@profile.Name">@profile.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button class="btn btn-success me-2" @onclick="LoadSelectedProfile" disabled="@string.IsNullOrEmpty(SelectedProfile)">
+                                <i class="bi bi-download"></i> Загрузить профиль
+                            </button>
+                            <button class="btn btn-danger" @onclick="DeleteProfile" disabled="@string.IsNullOrEmpty(SelectedProfile)">
+                                <i class="bi bi-trash"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (Profiles.Any())
+                    {
+                        <div class="mt-3">
+                            <h6>Доступные профили:</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var profile in Profiles)
+                                {
+                                    <span class="badge bg-primary p-2">@profile.Name</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопки управления -->
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <button class="btn btn-success btn-lg me-2" @onclick="StartConversion" disabled="@IsConverting">
+                        <i class="bi bi-play-circle"></i> @(IsConverting ? "Конвертация..." : "Начать конвертацию")
+                    </button>
+                    <button class="btn btn-danger btn-lg" @onclick="CancelConversion" disabled="@(!IsConverting)">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Прогресс -->
+        @if (IsConverting || Progress > 0)
+        {
+            <div class="col-md-12 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>Прогресс конвертации</h5>
+                        <div class="progress" style="height: 30px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                 role="progressbar"
+                                 style="width: @Progress%"
+                                 aria-valuenow="@Progress"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                                @Progress%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Результат -->
+        @if (IsConverted)
+        {
+            <div class="col-md-12 mb-4" id="resultSection">
+                <div class="card border-success">
+                    <div class="card-body text-center">
+                        <h4 class="text-success">✅ Конвертация завершена!</h4>
+                        <p class="text-muted">Файл сохранён: @OutputFilePath</p>
+                        <button class="btn btn-primary btn-lg" @onclick="OpenFolder">
+                            <i class="bi bi-folder2-open"></i> Открыть папку с файлом
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+
+@code {
+    private string FileName = "";
+    private string Duration = "";
+    private string Codec = "";
+    private string Resolution = "";
+    private string Fps = "";
+    private string OutputFormat = "mp4";
+    private string VideoCodec = "libx264";
+    private string AudioCodec = "aac";
+    private int? VideoBitrate;
+    private int? AudioBitrate = 192;
+    private int Crf = 23;
+    private int QScale = 2;
+    private string Preset = "medium";
+    private string Scale = "";
+    private string FpsOutput = "";
+    private bool IsConverting = false;
+    private bool IsConverted = false;
+    private int Progress = 0;
+    private string? InputFilePath;
+    private string? OutputFilePath;
+    private double DurationSeconds;
+    private CancellationTokenSource? Cts;
+    private string[] Formats = { "mp4", "avi", "mkv", "mov", "wmv", "flv" };
+
+    private List<VideoProfile> Profiles = new();
+    private string SelectedProfile = "";
+    private string NewProfileName = "";
+
+    // Разрешённые расширения
+    private readonly string[] AllowedVideoExtensions = { "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpeg", "mpg", "3gp", "ts" };
+
+    private bool IsValidCrf => Crf >= 0 && Crf <= 51;
+    private bool IsValidVideoBitrate => !VideoBitrate.HasValue || VideoBitrate.Value > 0;
+    private bool IsValidAudioBitrate => !AudioBitrate.HasValue || (AudioBitrate.Value >= 64 && AudioBitrate.Value <= 320);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Подписываемся на горячие клавиши
+                Hotkeys.OnCancelRequested += HandleCancel;
+
+                // Инициализируем с защитой от ошибок
+                await Hotkeys.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                // Если горячие клавиши не работают — это не критично
+                // Логируем и продолжаем работу
+                try
+                {
+                    Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}");
+                }
+                catch { }
+            }
+        }
+    }
+
+    private async Task HandleCancel()
+    {
+        if (IsConverting) CancelConversion();
+    }
+
+
+    private async Task SelectFile()
+    {
+        try
+        {
+            var result = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Выберите видео файл"
+            });
+
+            if (result == null) return;
+
+            InputFilePath = result.FullPath;
+            FileName = Path.GetFileName(InputFilePath);
+            var ext = Path.GetExtension(InputFilePath).TrimStart('.').ToLower();
+
+            // ПРОВЕРКА 1: Расширение
+            if (!AllowedVideoExtensions.Contains(ext))
+            {
+                Logger.LogWarning($"Видео конвертер: отклонён файл с недопустимым расширением .{ext} - {FileName}");
+                await ShowToast($"❌ Формат .{ext.ToUpper()} не поддерживается!\n\nВыберите видео файл.", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            // ПРОВЕРКА 2: Размер файла
+            var fileInfo = new FileInfo(InputFilePath);
+            if (fileInfo.Length == 0)
+            {
+                Logger.LogWarning($"Видео конвертер: отклонён пустой файл - {FileName}");
+                await ShowToast("❌ Файл пустой (0 байт)!", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            if (fileInfo.Length > 10L * 1024 * 1024 * 1024)
+            {
+                Logger.LogWarning($"Видео конвертер: отклонён слишком большой файл - {FileName} ({fileInfo.Length} байт)");
+                await ShowToast("❌ Файл слишком большой (максимум 10 ГБ)!", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            // ПРОВЕРКА 3: Magic numbers
+            if (!ValidateVideoContent(InputFilePath, ext))
+            {
+                Logger.LogWarning($"Видео конвертер: отклонён файл с неверным содержимым - {FileName}");
+                await ShowToast($"❌ Содержимое файла не соответствует формату {ext.ToUpper()}!\n\nВозможно, файл переименован или повреждён.", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            Logger.LogInfo($"Видео конвертер: загружен файл - {FileName} ({fileInfo.Length} байт)");
+
+            var info = await InfoService.GetInfoAsync(InputFilePath);
+            Duration = info.Duration;
+            Codec = info.Codec;
+            Resolution = info.Resolution;
+            Fps = info.Fps;
+            DurationSeconds = info.DurationSeconds;
+
+            IsConverted = false;
+            Progress = 0;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Видео конвертер: ошибка выбора файла", ex);
+            await ShowToast($"❌ Ошибка выбора файла: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    // Проверка magic numbers для видео
+    private bool ValidateVideoContent(string filePath, string extension)
+    {
+        try
+        {
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length < 4) return false;
+
+            var buffer = new byte[12];
+            using var fs = File.OpenRead(filePath);
+            fs.Read(buffer, 0, Math.Min(12, (int)fileInfo.Length));
+
+            return extension.ToLower() switch
+            {
+                "mp4" or "mov" or "m4v" or "3gp" => buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 && buffer[7] == 0x70,
+                "avi" => buffer[0] == 0x52 && buffer[1] == 0x49 && buffer[2] == 0x46 && buffer[3] == 0x46,
+                "mkv" or "webm" => buffer[0] == 0x1A && buffer[1] == 0x45 && buffer[2] == 0xDF && buffer[3] == 0xA3,
+                "wmv" => buffer[0] == 0x30 && buffer[1] == 0x26 && buffer[2] == 0xB2 && buffer[3] == 0x75,
+                "flv" => buffer[0] == 0x46 && buffer[1] == 0x4C && buffer[2] == 0x56,
+                "mpeg" or "mpg" or "ts" => buffer[0] == 0x00 && buffer[1] == 0x00 && buffer[2] == 0x01 && (buffer[3] == 0xBA || buffer[3] == 0xB3),
+                // Для остальных - разрешаем (сложно определить)
+                _ => true
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Ошибка проверки magic numbers: {filePath}", ex);
+            return true;
+        }
+    }
+
+    private void OnCodecChanged(ChangeEventArgs e)
+    {
+        VideoCodec = e.Value?.ToString() ?? "libx264";
+        if (VideoCodec.Contains("nvenc", StringComparison.OrdinalIgnoreCase)) Preset = "medium";
+        StateHasChanged();
+    }
+
+    private void OnCrfChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out int v)) Crf = Math.Max(0, Math.Min(51, v)); }
+    private void OnCrfInputChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out int v)) Crf = Math.Max(0, Math.Min(51, v)); }
+    private void OnQScaleChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out int v)) QScale = Math.Max(1, Math.Min(31, v)); }
+
+    private void OnVideoBitrateChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(val)) VideoBitrate = null;
+        else if (int.TryParse(val, out int p)) VideoBitrate = p >= 0 ? p : null;
+    }
+
+    private void OnAudioBitrateChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int p)) AudioBitrate = Math.Max(64, Math.Min(320, p));
+    }
+
+    private async Task ScrollToElement(string elementId) { try { await JSRuntime.InvokeVoidAsync("scrollToElement", elementId); } catch { } }
+
+    private async Task StartConversion()
+    {
+        if (string.IsNullOrEmpty(InputFilePath)) { await ShowToast("⚠️ Выберите файл", ToastType.Warning); return; }
+        if (!IsValidCrf) { await ShowToast("❌ CRF должен быть от 0 до 51", ToastType.Error); return; }
+        if (!IsValidVideoBitrate) { await ShowToast("❌ Видео битрейт должен быть положительным", ToastType.Error); return; }
+        if (!IsValidAudioBitrate) { await ShowToast("❌ Аудио битрейт должен быть от 64 до 320", ToastType.Error); return; }
+
+        try
+        {
+            var baseName = Path.GetFileNameWithoutExtension(FileName);
+            var suggestedName = $"{baseName}_converted.{OutputFormat}";
+            var savePath = await ChooseSaveFile(suggestedName);
+
+            if (string.IsNullOrEmpty(savePath)) { await ShowToast("⚠️ Сохранение отменено", ToastType.Warning); return; }
+            OutputFilePath = savePath;
+        }
+        catch (Exception ex)
+        {
+            await ShowToast($"❌ Ошибка выбора пути: {ex.Message}", ToastType.Error);
+            return;
+        }
+
+        IsConverting = true;
+        IsConverted = false;
+        Progress = 0;
+        Cts = new CancellationTokenSource();
+
+        var options = new VideoConversionOptions
+        {
+            VideoCodec = VideoCodec,
+            AudioCodec = AudioCodec,
+            VideoBitrate = VideoBitrate,
+            AudioBitrate = AudioBitrate,
+            Crf = Crf,
+            QScale = QScale,
+            Preset = Preset,
+            Scale = Scale,
+            Fps = FpsOutput
+        };
+
+        var progressReporter = new Progress<int>(value =>
+        {
+            Progress = Math.Max(0, Math.Min(100, value));
+            InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            await VideoService.ConvertAsync(InputFilePath, OutputFilePath, DurationSeconds, progressReporter, options, Cts.Token);
+
+            IsConverted = true;
+            Logger.LogInfo($"Видео конвертер: конвертация завершена - {FileName} -> {Path.GetFileName(OutputFilePath)}");
+            await ShowToast("✅ Конвертация завершена!", ToastType.Success);
+            await ScrollToElement("resultSection");
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogInfo($"Видео конвертер: конвертация отменена");
+            await ShowToast("❌ Конвертация отменена", ToastType.Warning);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Видео конвертер: ошибка конвертации", ex);
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+        finally
+        {
+            IsConverting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string?> ChooseSaveFile(string suggestedName)
+    {
+        try
+        {
+            var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для сохранения");
+            if (!string.IsNullOrEmpty(folder)) return Path.Combine(folder, suggestedName);
+            return null;
+        }
+        catch
+        {
+            var dir = Path.GetDirectoryName(InputFilePath);
+            if (!string.IsNullOrEmpty(dir)) return Path.Combine(dir, suggestedName);
+            return null;
+        }
+    }
+
+    private void CancelConversion() => Cts?.Cancel();
+
+    private void OpenFolder()
+    {
+        if (string.IsNullOrEmpty(OutputFilePath)) return;
+
+        try
+        {
+            if (!File.Exists(OutputFilePath))
+            {
+                Logger.LogWarning($"Видео конвертер: файл не существует - {OutputFilePath}");
+                return;
+            }
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{OutputFilePath}\"",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+            Logger.LogInfo($"Видео конвертер: открыта папка с файлом {OutputFilePath}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Видео конвертер: ошибка открытия папки", ex);
+        }
+    }
+
+    private void LoadProfiles()
+    {
+        var profilesFile = GetProfilesFilePath();
+        if (File.Exists(profilesFile))
+        {
+            try
+            {
+                var json = File.ReadAllText(profilesFile);
+                Profiles = System.Text.Json.JsonSerializer.Deserialize<List<VideoProfile>>(json) ?? new List<VideoProfile>();
+                if (!Profiles.Any()) CreateDefaultProfiles();
+                StateHasChanged();
+            }
+            catch { CreateDefaultProfiles(); }
+        }
+        else CreateDefaultProfiles();
+    }
+
+    private void CreateDefaultProfiles()
+    {
+        Profiles = new List<VideoProfile>
+        {
+            new VideoProfile { Name = "🎬 Мемный", VideoCodec = "libx264", AudioCodec = "libmp3lame", VideoBitrate = 500, AudioBitrate = 64, Crf = 40, QScale = 10, Preset = "ultrafast", Scale = "320x240", Fps = "15" },
+            new VideoProfile { Name = "⭐ Лучшее качество", VideoCodec = "libx265", AudioCodec = "aac", VideoBitrate = null, AudioBitrate = 320, Crf = 18, QScale = 2, Preset = "veryslow", Scale = "", Fps = "" }
+        };
+        SaveProfilesToFile();
+        StateHasChanged();
+    }
+
+    private async Task SaveProfile()
+    {
+        if (string.IsNullOrWhiteSpace(NewProfileName)) { await ShowToast("⚠️ Введите имя профиля!", ToastType.Warning); return; }
+        if (Profiles.Any(p => p.Name.Equals(NewProfileName, StringComparison.OrdinalIgnoreCase))) { await ShowToast($"⚠️ Профиль '{NewProfileName}' уже существует!", ToastType.Warning); return; }
+
+        Profiles.Add(new VideoProfile
+        {
+            Name = NewProfileName,
+            VideoCodec = VideoCodec,
+            AudioCodec = AudioCodec,
+            VideoBitrate = VideoBitrate,
+            AudioBitrate = AudioBitrate,
+            Crf = Crf,
+            QScale = QScale,
+            Preset = Preset,
+            Scale = Scale,
+            Fps = FpsOutput
+        });
+        SaveProfilesToFile();
+        var name = NewProfileName;
+        NewProfileName = "";
+        await ShowToast($"✅ Профиль '{name}' сохранен!", ToastType.Success);
+    }
+
+    private void LoadSelectedProfile() => ApplyProfileByName(SelectedProfile);
+
+    private void ApplyProfileByName(string? profileName)
+    {
+        if (string.IsNullOrEmpty(profileName)) return;
+        var profile = Profiles.FirstOrDefault(p => p.Name == profileName);
+        if (profile != null)
+        {
+            VideoCodec = profile.VideoCodec ?? "libx264";
+            AudioCodec = profile.AudioCodec ?? "aac";
+            VideoBitrate = profile.VideoBitrate;
+            AudioBitrate = profile.AudioBitrate;
+            Crf = profile.Crf ?? 23;
+            QScale = profile.QScale ?? 2;
+            Preset = profile.Preset ?? "medium";
+            Scale = profile.Scale ?? "";
+            FpsOutput = profile.Fps ?? "";
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteProfile()
+    {
+        if (string.IsNullOrEmpty(SelectedProfile)) return;
+        var profile = Profiles.FirstOrDefault(p => p.Name == SelectedProfile);
+        if (profile != null)
+        {
+            Profiles.Remove(profile);
+            SaveProfilesToFile();
+            var name = profile.Name;
+            SelectedProfile = "";
+            await ShowToast($"✅ Профиль '{name}' удален!", ToastType.Success);
+        }
+    }
+
+    private string GetProfilesFilePath()
+    {
+        var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DazzConv");
+        if (!Directory.Exists(appDataPath)) Directory.CreateDirectory(appDataPath);
+        return Path.Combine(appDataPath, "profiles.json");
+    }
+
+    private void SaveProfilesToFile()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(Profiles, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(GetProfilesFilePath(), json);
+        }
+        catch (Exception ex) { Logger.LogError($"Видео конвертер: ошибка сохранения профилей", ex); }
+    }
+
+    protected override void OnInitialized() => LoadProfiles();
+
+    private async Task ShowToast(string message, ToastType type = ToastType.Info)
+    {
+        try { await JSRuntime.InvokeVoidAsync("showToast", message, type.ToString().ToLower()); }
+        catch { await JSRuntime.InvokeVoidAsync("alert", message); }
+    }
+
+    private enum ToastType { Success, Error, Warning, Info }
+}

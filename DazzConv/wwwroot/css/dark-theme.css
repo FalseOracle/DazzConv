@@ -1,0 +1,67 @@
+/* Тёмная тема */
+body.dark-theme {
+    background-color: #1a1a2e;
+    color: #eee;
+}
+
+body.dark-theme .card {
+    background-color: #16213e;
+    border-color: #0f3460;
+    color: #eee;
+}
+
+body.dark-theme .card-header {
+    background-color: #0f3460;
+    color: #fff;
+}
+
+body.dark-theme .form-control,
+body.dark-theme .form-select {
+    background-color: #1a1a2e;
+    border-color: #0f3460;
+    color: #eee;
+}
+
+body.dark-theme .table {
+    color: #eee;
+}
+
+body.dark-theme .table-bordered {
+    border-color: #0f3460;
+}
+
+body.dark-theme .alert-info {
+    background-color: #0f3460;
+    border-color: #1a4a7a;
+    color: #fff;
+}
+
+body.dark-theme .btn-outline-primary {
+    color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+body.dark-theme .btn-outline-primary:hover {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+/* Кнопка переключения темы */
+.theme-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.1);
+}

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <title>DazzConv - Конвертер файлов</title>
+</head>
+
+<body>
+    <div id="app">
+        <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script src="js/scroll.js"></script>
+    <script>
+        // Применяем сохранённую тему при загрузке
+        window.addEventListener('load', function () {
+            const isDark = localStorage.getItem('darkTheme') === 'true';
+            if (isDark) {
+                document.body.classList.add('dark-theme');
+            }
+        });
+    </script>
+
+
+    <script>
+        window.initBatchDropZone = function (dotNetHelper) {
+            const dropZone = document.getElementById('drop-zone');
+            if (!dropZone) return;
+
+            // Предотвращаем стандартное поведение для всей страницы
+            document.addEventListener('dragover', (e) => {
+                if (e.target === dropZone || dropZone.contains(e.target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, false);
+
+            document.addEventListener('drop', (e) => {
+                if (e.target === dropZone || dropZone.contains(e.target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, false);
+
+            // Обработчики для зоны
+            dropZone.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-over');
+                dropZone.style.borderColor = '#28a745';
+                dropZone.style.background = 'rgba(40, 167, 69, 0.2)';
+            }, false);
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-over');
+            }, false);
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Проверяем, что ушли именно из зоны, а не в дочерний элемент
+                if (e.relatedTarget === null || !dropZone.contains(e.relatedTarget)) {
+                    dropZone.classList.remove('drag-over');
+                    dropZone.style.borderColor = '#667eea';
+                    dropZone.style.background = '';
+                }
+            }, false);
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+                dropZone.style.borderColor = '#667eea';
+                dropZone.style.background = '';
+
+                // Открываем стандартный диалог выбора файлов
+                const input = document.getElementById('batchFileInput');
+                if (input) {
+                    input.click();
+                }
+            }, false);
+
+            console.log('Drop zone initialized');
+        };
+    </script>
+
+    <script>
+        window.clickElement = function (elementId) {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                console.error(`[clickElement] Элемент с id="${elementId}" не найден!`);
+                return false;
+            }
+
+            // Проверяем что элемент input[type=file]
+            if (element.tagName.toLowerCase() === 'input' && element.type === 'file') {
+                // Проверяем что элемент не скрыт через display:none
+                const computedStyle = window.getComputedStyle(element);
+                if (computedStyle.display === 'none') {
+                    console.warn(`[clickElement] Элемент имеет display:none, клик может не сработать!`);
+                }
+            }
+
+            try {
+                element.click();
+                return true;
+            } catch (e) {
+                console.error(`[clickElement] Ошибка клика:`, e);
+                return false;
+            }
+        }
+
+        // Диагностика при загрузке
+        window.addEventListener('load', function () {
+            setTimeout(function () {
+                const inputFile = document.getElementById('batchFileInput');
+                if (inputFile) {
+                    console.log('[DazzConv] InputFile найден:', {
+                        id: inputFile.id,
+                        type: inputFile.type,
+                        display: window.getComputedStyle(inputFile).display,
+                        visibility: window.getComputedStyle(inputFile).visibility
+                    });
+                } else {
+                    console.warn('[DazzConv] InputFile НЕ найден на странице!');
+                }
+            }, 2000);
+        });
+    </script>
+
+    <script>
+        // Toast уведомления
+        window.showToast = function (message, type = 'info') {
+            // Удаляем старые toast если есть
+            const oldToast = document.querySelector('.custom-toast');
+            if (oldToast) {
+                oldToast.remove();
+            }
+
+            // Создаём toast
+            const toast = document.createElement('div');
+            toast.className = `custom-toast toast-${type}`;
+
+            const icons = {
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+
+            toast.innerHTML = `
+                                            <span class="toast-icon">${icons[type] || icons.info}</span>
+                                            <span class="toast-message">${message}</span>
+                                            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+                                        `;
+
+            // Стили
+            toast.style.cssText = `
+                                            position: fixed;
+                                            top: 20px;
+                                            right: 20px;
+                                            padding: 15px 20px;
+                                            border-radius: 8px;
+                                            color: white;
+                                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                            font-size: 14px;
+                                            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                                            display: flex;
+                                            align-items: center;
+                                            gap: 10px;
+                                            z-index: 9999;
+                                            animation: slideIn 0.3s ease;
+                                            max-width: 400px;
+                                        `;
+
+            // Цвета для разных типов
+            const colors = {
+                success: '#28a745',
+                error: '#dc3545',
+                warning: '#ffc107',
+                info: '#17a2b8'
+            };
+
+            toast.style.background = colors[type] || colors.info;
+
+            // Анимация
+            const style = document.createElement('style');
+            style.textContent = `
+                                            @keyframes slideIn {
+                                                from { transform: translateX(100%); opacity: 0; }
+                                                to { transform: translateX(0); opacity: 1; }
+                                            }
+                                            .toast-close {
+                                                background: none;
+                                                border: none;
+                                                color: white;
+                                                font-size: 20px;
+                                                cursor: pointer;
+                                                padding: 0;
+                                                line-height: 1;
+                                            }
+                                        `;
+            document.head.appendChild(style);
+
+            document.body.appendChild(toast);
+
+            // Автозакрытие через 5 секунд
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.style.animation = 'slideIn 0.3s ease reverse';
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 5000);
+        };
+    </script>
+
+    <script>
+        // Глобальный обработчик клавиши Z для сброса бейджей NEW
+        window.registerResetKeyHandler = function (dotNetHelper) {
+            // Сохраняем ссылку для возможности удаления
+            window._resetKeyHandler = function (e) {
+                // Игнорируем если фокус в поле ввода
+                const activeTag = (document.activeElement?.tagName || '').toUpperCase();
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) {
+                    return;
+                }
+
+                // Игнорируем если нажаты модификаторы
+                if (e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) {
+                    return;
+                }
+
+                // Реагируем только на клавишу Z
+                if (e.key.toLowerCase() === 'z') {
+                    dotNetHelper.invokeMethodAsync('ResetNewBadges');
+                }
+            };
+
+            document.addEventListener('keydown', window._resetKeyHandler);
+        };
+    </script>
+
+
+    <script>
+        // Открытие папки с выделенным файлом через JavaScript
+        window.openFolderWithFile = function (filePath) {
+            try {
+                // Используем Shell.Application COM объект для надёжности
+                const shell = new ActiveXObject("Shell.Application");
+                if (shell) {
+                    shell.Open(filePath);
+                    return true;
+                }
+            } catch (e) {
+                console.log("ActiveXObject не доступен, пробуем альтернативу");
+            }
+
+            // Fallback: через скрытый iframe с explorer протоколом
+            try {
+                const iframe = document.createElement("iframe");
+                iframe.style.display = "none";
+                iframe.src = "file:///" + filePath.replace(/\\/g, "/");
+                document.body.appendChild(iframe);
+                setTimeout(() => iframe.remove(), 1000);
+                return true;
+            } catch (e) {
+                console.error("Ошибка открытия:", e);
+                return false;
+            }
+        };
+
+        // Надёжный способ через .NET interop
+        window.openFolderSelectFile = function (filePath) {
+            // Создаём временный VBS скрипт для надёжного выделения
+            const fso = new ActiveXObject("Scripting.FileSystemObject");
+            const shell = new ActiveXObject("WScript.Shell");
+
+            try {
+                // Нормализуем путь
+                const normalizedPath = filePath.replace(/\//g, "\\");
+
+                // Используем explorer напрямую
+                shell.Run('explorer.exe /select,"' + normalizedPath + '"', 1, false);
+                return true;
+            } catch (e) {
+                console.error("Ошибка:", e);
+                return false;
+            }
+        };
+    </script>
+
+    <script src="js/hotkeys.js"></script>
+    <script src="js/batch-scroll.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,726 @@
+﻿@page "/image"
+@using ConverToDazz.Core.Services
+@using ConverToDazz.Core.Models
+@using DazzConv.Services
+@inject ImageConverterService ImageService
+@inject IJSRuntime JSRuntime
+@inject LoggerService Logger
+@inject HotkeyService Hotkeys
+
+<h3 class="text-center mb-4">Конвертер Изображений</h3>
+
+<div class="card mb-4" id="uploadSection">
+    <div class="card-body text-center">
+        <button class="btn btn-primary btn-lg" @onclick="SelectFile">
+            <i class="bi bi-folder2-open"></i> Выбрать изображение
+        </button>
+        <p class="text-muted mt-2 mb-0">Поддерживаемые форматы: JPG, PNG, WebP, AVIF, BMP, TIFF, ICO</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(InputFilePath))
+{
+    <div class="row">
+        <!-- Превью и информация -->
+        <div class="col-md-5 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Информация о файле</h5>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(PreviewBase64))
+                    {
+                        <div class="text-center mb-3">
+                            <img src="data:image/png;base64,@PreviewBase64"
+                                 class="img-fluid rounded border"
+                                 alt="Preview"
+                                 style="max-height: 300px;" />
+                        </div>
+                    }
+
+                    <table class="table table-sm table-bordered">
+                        <tbody>
+                            <tr>
+                                <th>Файл:</th>
+                                <td class="text-break">@FileName</td>
+                            </tr>
+                            <tr>
+                                <th>Размер:</th>
+                                <td>@FileSize</td>
+                            </tr>
+                            <tr>
+                                <th>Формат:</th>
+                                <td>@InputFormat.ToUpper()</td>
+                            </tr>
+                            <tr>
+                                <th>Разрешение:</th>
+                                <td>@ImageWidth x @ImageHeight px</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Настройки конвертации -->
+        <div class="col-md-7 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Настройки конвертации</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Выходной формат -->
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Выходной формат:</strong></label>
+                        <select class="form-select form-select-lg" value="@OutputFormat" @onchange="OnFormatChanged">
+                            @foreach (var format in ImageService.SupportedExtensions)
+                            {
+                                <option value="@format">@format.ToUpper() - @GetFormatName(format)</option>
+                            }
+                        </select>
+
+                        @if (OutputFormat == "ico")
+                        {
+                            <div class="alert alert-info mt-2 mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>ICO формат:</strong> Максимальный размер 256×256 пикселей.
+                                Изображение будет автоматически уменьшено с сохранением пропорций.
+                            </div>
+                        }
+                        else if (OutputFormat == "avif")
+                        {
+                            <div class="alert alert-info mt-2 mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>AVIF:</strong> Современный формат с лучшим сжатием.
+                                Может не поддерживаться старыми программами.
+                            </div>
+                        }
+                        else if (OutputFormat == "heic")
+                        {
+                            <div class="alert alert-info mt-2 mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>HEIC:</strong> Формат Apple. Может не открываться в Windows без дополнительных кодеков.
+                            </div>
+                        }
+                        else if (OutputFormat == "gif")
+                        {
+                            <div class="alert alert-warning mt-2 mb-0">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>GIF:</strong> Поддерживает только 256 цветов.
+                                Не подходит для фотографий.
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Качество (для JPG, WebP, AVIF) -->
+                    @if (ShowQualitySlider)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <strong>Качество: @Quality%</strong>
+                            </label>
+                            <input type="range" class="form-range" min="1" max="100" step="5"
+                                   value="@Quality" @oninput="OnQualityChanged" />
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">Низкое (1%)</small>
+                                <small class="text-muted">Среднее (50%)</small>
+                                <small class="text-muted">Высокое (100%)</small>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Изменение размера -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="ResizeEnabled" id="resizeCheck" />
+                            <label class="form-check-label" for="resizeCheck">
+                                <strong>Изменить размер</strong>
+                            </label>
+                        </div>
+
+                        @if (ResizeEnabled)
+                        {
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Ширина (px):</label>
+                                    <input type="number"
+                                           class="form-control @(IsValidImageSize(NewWidth) ? "" : "is-invalid")"
+                                           @bind="NewWidth"
+                                           min="1"
+                                           max="8192"
+                                           placeholder="1-8192" />
+                                    @if (!IsValidImageSize(NewWidth))
+                                    {
+                                        <div class="invalid-feedback">
+                                            Допустимый диапазон: 1-8192 пикселей
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Высота (px):</label>
+                                    <input type="number"
+                                           class="form-control @(IsValidImageSize(NewHeight) ? "" : "is-invalid")"
+                                           @bind="NewHeight"
+                                           min="1"
+                                           max="8192"
+                                           placeholder="1-8192" />
+                                    @if (!IsValidImageSize(NewHeight))
+                                    {
+                                        <div class="invalid-feedback">
+                                            Допустимый диапазон: 1-8192 пикселей
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" @bind="KeepAspectRatio" id="aspectCheck" />
+                                <label class="form-check-label" for="aspectCheck">
+                                    Сохранить пропорции
+                                </label>
+                            </div>
+
+                            @if (OutputFormat == "ico" && ResizeEnabled)
+                            {
+                                <div class="alert alert-warning mt-2 mb-0">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    Внимание: Для ICO размер будет ограничен 256×256 пикселей,
+                                    даже если вы указали больший размер.
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <!-- Дополнительные опции -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="OptimizeSize" id="optimizeCheck" />
+                            <label class="form-check-label" for="optimizeCheck">
+                                Оптимизировать размер файла
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Кнопки управления -->
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-success btn-lg" @onclick="StartConversion" disabled="@IsConverting">
+                            <i class="bi bi-play-circle"></i> @(IsConverting ? "Конвертация..." : "Начать конвертацию")
+                        </button>
+                        <button class="btn btn-danger btn-lg" @onclick="CancelConversion" disabled="@(!IsConverting)">
+                            <i class="bi bi-x-circle"></i> Отмена
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Прогресс -->
+        @if (IsConverting)
+        {
+            <div class="col-md-12 mb-4">
+                <div class="card border-warning">
+                    <div class="card-body text-center">
+                        <h5>Конвертация...</h5>
+                        <div class="progress" style="height: 30px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark"
+                                 role="progressbar"
+                                 style="width: @Progress%">
+                                @Progress%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+
+        <!-- Результат -->
+        @if (IsConverted)
+        {
+            <div class="col-md-12 mb-4" id="resultSection">
+                <div class="card border-success bg-light shadow-lg">
+                    <div class="card-body text-center p-5">
+                        <h2 class="text-success mb-3">
+                            <i class="bi bi-check-circle-fill"></i> Конвертация завершена!
+                        </h2>
+                        <p class="lead mb-4">
+                            Файл успешно сконвертирован в формат <strong>@OutputFormat.ToUpper()</strong><br />
+                            <small class="text-muted">
+                                Размер: @GetConvertedSize()
+                                @if (OriginalSize > 0 && ConvertedSize > 0)
+                                {
+                                    var change = ((double)(ConvertedSize - OriginalSize) / OriginalSize * 100);
+                                    <span class="@((change < 0) ? "text-success" : "text-danger")">
+                                        (@(change > 0 ? "+" : "")@change.ToString("F1")%)
+                                    </span>
+                                }
+                            </small>
+                        </p>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <button class="btn btn-primary btn-lg" @onclick="SaveFile">
+                                <i class="bi bi-download me-2"></i>Сохранить файл
+                            </button>
+                            @if (!string.IsNullOrEmpty(SavedFilePath) && File.Exists(SavedFilePath))
+                            {
+                                <button class="btn btn-success btn-lg" @onclick="OpenFolder">
+                                    <i class="bi bi-folder2-open me-2"></i>Открыть папку с файлом
+                                </button>
+                            }
+                            <button class="btn btn-secondary btn-lg" @onclick="ResetConverter">
+                                <i class="bi bi-arrow-clockwise me-2"></i>Новый файл
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(SavedFilePath))
+                        {
+                            <div class="mt-3 text-muted small">
+                                <i class="bi bi-check-circle text-success me-1"></i>
+                                Сохранено: @SavedFilePath
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private string FileName = "";
+    private string FileSize = "";
+    private string InputFormat = "";
+    private int ImageWidth;
+    private int ImageHeight;
+    private string OutputFormat = "png";
+    private int Quality = 85;
+    private bool ResizeEnabled = false;
+    private int NewWidth;
+    private int NewHeight;
+    private bool KeepAspectRatio = true;
+    private bool OptimizeSize = false;
+    private bool IsConverting = false;
+    private bool IsConverted = false;
+    private int Progress = 0;
+    private string? InputFilePath;
+    private byte[]? ConvertedData;
+    private string PreviewBase64 = "";
+    private CancellationTokenSource? Cts;
+    private long OriginalSize;
+    private long ConvertedSize;
+    private string? SavedFilePath; 
+
+    private readonly string[] AllowedExtensions = { "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "tiff", "ico" };
+
+    private bool ShowQualitySlider => OutputFormat is "jpg" or "jpeg" or "webp" or "avif";
+
+    private bool IsValidImageSize(int size) => size >= 1 && size <= 8192;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Подписываемся на горячие клавиши
+                Hotkeys.OnCancelRequested += HandleCancel;
+
+                // Инициализируем с защитой от ошибок
+                await Hotkeys.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                // Если горячие клавиши не работают — это не критично
+                // Логируем и продолжаем работу
+                try
+                {
+                    Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}");
+                }
+                catch { }
+            }
+        }
+    }
+
+    private async Task HandleCancel()
+    {
+        if (IsConverting) CancelConversion();
+    }
+
+    private async Task SelectFile()
+    {
+        try
+        {
+            var result = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Выберите изображение",
+                FileTypes = FilePickerFileType.Images
+            });
+
+            if (result == null) return;
+
+            var ext = Path.GetExtension(result.FullPath).TrimStart('.').ToLower();
+
+            // ПРОВЕРКА 1: Расширение
+            if (!AllowedExtensions.Contains(ext))
+            {
+                Logger.LogWarning($"Изображения: отклонён файл с недопустимым расширением .{ext} - {Path.GetFileName(result.FullPath)}");
+                await ShowToast($"❌ Формат .{ext.ToUpper()} не поддерживается!\n\nВыберите изображение.", ToastType.Error);
+                return;
+            }
+
+            // ПРОВЕРКА 2: Размер файла
+            var fileInfo = new FileInfo(result.FullPath);
+            if (fileInfo.Length == 0)
+            {
+                Logger.LogWarning($"Изображения: отклонён пустой файл - {Path.GetFileName(result.FullPath)}");
+                await ShowToast("❌ Файл пустой (0 байт)!", ToastType.Error);
+                return;
+            }
+
+            if (fileInfo.Length > 500L * 1024 * 1024)
+            {
+                Logger.LogWarning($"Изображения: отклонён слишком большой файл - {Path.GetFileName(result.FullPath)} ({fileInfo.Length} байт)");
+                await ShowToast("❌ Файл слишком большой (максимум 500 МБ)!", ToastType.Error);
+                return;
+            }
+
+            // ПРОВЕРКА 3: Magic numbers
+            if (!ValidateImageContent(result.FullPath, ext))
+            {
+                Logger.LogWarning($"Изображения: отклонён файл с неверным содержимым - {Path.GetFileName(result.FullPath)}");
+                await ShowToast($"❌ Содержимое файла не соответствует формату {ext.ToUpper()}!\n\nВозможно, файл переименован или повреждён.", ToastType.Error);
+                return;
+            }
+
+            Logger.LogInfo($"Изображения: загружен файл - {Path.GetFileName(result.FullPath)} ({fileInfo.Length} байт)");
+            await LoadImage(result.FullPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Изображения: ошибка выбора файла", ex);
+            await ShowToast($"❌ Ошибка выбора файла: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    // Проверка magic numbers для изображений
+    private bool ValidateImageContent(string filePath, string extension)
+    {
+        try
+        {
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length < 4) return false;
+
+            var buffer = new byte[12];
+            using var fs = File.OpenRead(filePath);
+            fs.Read(buffer, 0, Math.Min(12, (int)fileInfo.Length));
+
+            return extension.ToLower() switch
+            {
+                "jpg" or "jpeg" => buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF,
+                "png" => buffer[0] == 0x89 && buffer[1] == 0x50 && buffer[2] == 0x4E && buffer[3] == 0x47,
+                "gif" => buffer[0] == 0x47 && buffer[1] == 0x49 && buffer[2] == 0x46,
+                "bmp" => buffer[0] == 0x42 && buffer[1] == 0x4D,
+                "webp" => buffer.Length >= 12 && buffer[0] == 0x52 && buffer[1] == 0x49 && buffer[2] == 0x46 && buffer[3] == 0x46 &&
+                          buffer[8] == 0x57 && buffer[9] == 0x45 && buffer[10] == 0x42 && buffer[11] == 0x50,
+                "tiff" => (buffer[0] == 0x49 && buffer[1] == 0x49) || (buffer[0] == 0x4D && buffer[1] == 0x4D),
+                "ico" => buffer[0] == 0x00 && buffer[1] == 0x00 && buffer[2] == 0x01 && buffer[3] == 0x00,
+                "avif" => buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 && buffer[7] == 0x70,
+                // GIF, HEIC - сложно определить, пропускаем
+                _ => true
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Ошибка проверки magic numbers: {filePath}", ex);
+            return true;
+        }
+    }
+
+    private async Task LoadImage(string filePath)
+    {
+        try
+        {
+            InputFilePath = filePath;
+            FileName = Path.GetFileName(filePath);
+
+            var info = ImageFileInfo.FromFile(filePath);
+            FileSize = FormatBytes(info.Size);
+            OriginalSize = info.Size;
+            InputFormat = info.Format;
+
+            var preview = await ImageService.CreatePreviewAsync(filePath, 300);
+            PreviewBase64 = Convert.ToBase64String(preview);
+
+            using var img = new ImageMagick.MagickImage(filePath);
+            ImageWidth = (int)img.Width;
+            ImageHeight = (int)img.Height;
+            NewWidth = ImageWidth;
+            NewHeight = ImageHeight;
+
+            IsConverted = false;
+            ConvertedData = null;
+            Progress = 0;
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Изображения: ошибка загрузки", ex);
+            await ShowToast($"❌ Ошибка загрузки изображения: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private void OnFormatChanged(ChangeEventArgs e) { OutputFormat = e.Value?.ToString() ?? "png"; StateHasChanged(); }
+    private void OnQualityChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out int q)) Quality = q; }
+
+    private async Task StartConversion()
+    {
+        if (string.IsNullOrEmpty(InputFilePath))
+        {
+            await ShowToast("⚠️ Выберите файл", ToastType.Warning);
+            return;
+        }
+
+        if (ResizeEnabled && (!IsValidImageSize(NewWidth) || !IsValidImageSize(NewHeight)))
+        {
+            await ShowToast("❌ Недопустимый размер!\n\nДопустимый диапазон: 1-8192 пикселей", ToastType.Error);
+            return;
+        }
+
+        IsConverting = true;
+        IsConverted = false;
+        Progress = 0;
+        Cts = new CancellationTokenSource();
+
+        try
+        {
+            var options = new ImageConversionOptions
+            {
+                OutputFormat = OutputFormat,
+                Quality = Quality,
+                ResizeEnabled = ResizeEnabled,
+                Width = ResizeEnabled ? NewWidth : ImageWidth,
+                Height = ResizeEnabled ? NewHeight : ImageHeight,
+                KeepAspectRatio = KeepAspectRatio,
+                OptimizeSize = OptimizeSize  // ← ИСПРАВЛЕНО: было OptimizeImages
+            };
+
+            ConvertedData = await ImageService.ConvertAdvancedAsync(InputFilePath, options);
+            ConvertedSize = ConvertedData.Length;
+
+            IsConverted = true;
+            Progress = 100;
+
+            Logger.LogInfo($"Изображения: конвертация завершена - {FileName} -> {OutputFormat} ({ConvertedSize} байт)");
+            await ShowToast("✅ Конвертация завершена!", ToastType.Success);
+            StateHasChanged();
+            await ScrollToElement("resultSection");
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogInfo($"Изображения: конвертация отменена");
+            await ShowToast("⚠️ Конвертация отменена", ToastType.Warning);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Изображения: ошибка конвертации", ex);
+            await ShowToast($"❌ Ошибка конвертации: {ex.Message}", ToastType.Error);
+        }
+        finally
+        {
+            IsConverting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CleanupMagickTempFiles(HashSet<string> filesBefore)
+    {
+        try
+        {
+            var tempPath = Path.GetTempPath();
+            foreach (var file in Directory.GetFiles(tempPath, "magick-*"))
+            {
+                // Удаляем только те, которых не было до конвертации
+                if (!filesBefore.Contains(file))
+                {
+                    try
+                    {
+                        var fileInfo = new FileInfo(file);
+                        // Удаляем только старые файлы (старше 5 минут)
+                        if (fileInfo.LastWriteTime < DateTime.Now.AddMinutes(-5))
+                        {
+                            fileInfo.Delete();
+                            Logger.LogInfo($"Изображения: удалён temp файл ImageMagick ({fileInfo.Length} байт)");
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Изображения: ошибка очистки temp файлов ImageMagick: {ex.Message}");
+        }
+    }
+
+
+    private async Task ScrollToElement(string elementId) { try { await JSRuntime.InvokeVoidAsync("scrollToElement", elementId); } catch { } }
+
+    private void CancelConversion() => Cts?.Cancel();
+
+    private async Task SaveFile()
+    {
+        if (ConvertedData == null)
+        {
+            await ShowToast("❌ Нет данных для сохранения", ToastType.Error);
+            return;
+        }
+
+        try
+        {
+            var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для сохранения");
+            if (string.IsNullOrEmpty(folder))
+            {
+                await ShowToast("⚠️ Сохранение отменено", ToastType.Warning);
+                return;
+            }
+
+            var baseName = Path.GetFileNameWithoutExtension(FileName);
+            var suggestedName = $"{baseName}_converted.{OutputFormat}";
+            var savePath = Path.Combine(folder, suggestedName);
+
+            await File.WriteAllBytesAsync(savePath, ConvertedData);
+
+            // СОХРАНЯЕМ путь для кнопки "Открыть папку"
+            SavedFilePath = savePath;
+
+            Logger.LogInfo($"Изображения: файл сохранён - {savePath}");
+            await ShowToast($"✅ Файл сохранён:\n{savePath}", ToastType.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Изображения: ошибка сохранения", ex);
+            await ShowToast($"❌ Ошибка сохранения: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private async Task OpenFolder()
+    {
+        // Если файл сохранён — открываем папку с ним
+        if (!string.IsNullOrEmpty(SavedFilePath) && File.Exists(SavedFilePath))
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = "/select,\"" + SavedFilePath + "\"",
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+                Logger.LogInfo($"Изображения: открыта папка с сохранённым файлом {SavedFilePath}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Изображения: ошибка открытия папки", ex);
+                await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+            }
+            return;
+        }
+
+        // Если файл НЕ сохранён — показываем предупреждение
+        if (ConvertedData == null)
+        {
+            _ = ShowToast("⚠️ Сначала сохраните файл", ToastType.Warning);
+            return;
+        }
+
+        // Fallback: сохраняем во временную папку и открываем
+        try
+        {
+            var tempFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Preview");
+            Directory.CreateDirectory(tempFolder);
+
+            var baseName = Path.GetFileNameWithoutExtension(FileName);
+            var previewPath = Path.Combine(tempFolder, $"{baseName}_preview.{OutputFormat}");
+
+            File.WriteAllBytes(previewPath, ConvertedData);
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = "/select,\"" + previewPath + "\"",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+
+            _ = ShowToast("⚠️ Файл открыт из временной папки. Сохраните его в нужное место.", ToastType.Warning);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Изображения: ошибка открытия папки", ex);
+            _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private bool HasEnoughDiskSpace(string path, long requiredBytes)
+    {
+        var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!);
+        return drive.AvailableFreeSpace > requiredBytes;
+    }
+
+    private void ResetConverter()
+    {
+        InputFilePath = null;
+        FileName = "";
+        FileSize = "";
+        InputFormat = "";
+        ImageWidth = 0;
+        ImageHeight = 0;
+        OutputFormat = "png";
+        Quality = 85;
+        ResizeEnabled = false;
+        NewWidth = 0;
+        NewHeight = 0;
+        KeepAspectRatio = true;
+        OptimizeSize = false;  // ← ДОБАВЛЕНО
+        IsConverting = false;
+        IsConverted = false;
+        Progress = 0;
+        PreviewBase64 = "";
+        ConvertedData = null;
+        OriginalSize = 0;
+        ConvertedSize = 0;
+        Cts?.Dispose();
+        Cts = null;
+        StateHasChanged();
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        const long kb = 1024, mb = kb * 1024;
+        if (bytes >= mb) return $"{(bytes / (double)mb):F2} MB";
+        if (bytes >= kb) return $"{(bytes / (double)kb):F2} KB";
+        return $"{bytes} B";
+    }
+
+    private string GetFormatName(string format) => format switch
+    {
+        "jpg" or "jpeg" => "JPEG (с потерями)",
+        "png" => "PNG (без потерь)",
+        "webp" => "WebP (современный)",
+        "avif" => "AVIF (лучшее сжатие)",
+        "ico" => "ICO (иконки)",
+        "bmp" => "BMP (без сжатия)",
+        "tiff" => "TIFF (профессиональный)",
+        _ => format.ToUpper()
+    };
+
+    private string GetConvertedSize() => ConvertedSize == 0 ? "" : FormatBytes(ConvertedSize);
+
+    private async Task ShowToast(string message, ToastType type = ToastType.Info)
+    {
+        try { await JSRuntime.InvokeVoidAsync("showToast", message, type.ToString().ToLower()); }
+        catch { await JSRuntime.InvokeVoidAsync("alert", message); }
+    }
+
+    private enum ToastType { Success, Error, Warning, Info }
+}

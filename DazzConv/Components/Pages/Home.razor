@@ -1,0 +1,373 @@
+﻿@page "/"
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+@implements IAsyncDisposable
+
+<div class="welcome-container" @onkeydown="HandleKeyDown" @onkeydown:preventDefault="false">
+    <div class="welcome-header">
+        <h1><i class="bi bi-film"></i> Добро пожаловать в Шпикачки Конвертачки</h1>
+        <p class="lead">Профессиональный конвертер файлов</p>
+    </div>
+
+    <!-- Первый ряд: основные конвертеры -->
+    <div class="features-grid">
+        <div class="feature-card" @onclick="GoToAudio">
+            <div class="feature-icon"><i class="bi bi-music-note-beamed"></i></div>
+            <h3>Аудио конвертер</h3>
+            <p>Преобразование аудиофайлов между популярными форматами с настройкой качества</p>
+            <ul>
+                <li>Извлечение аудиодорожки из видео</li>
+                <li>Поддержка MP3, WAV, FLAC, OGG, AAC и других форматов</li>
+                <li>Точная настройка битрейта и частоты дискретизации</li>
+                <li>Готовые пресеты для различных задач</li>
+            </ul>
+        </div>
+
+        <div class="feature-card" @onclick="GoToImage">
+            <div class="feature-icon"><i class="bi bi-image"></i></div>
+            <h3>Конвертер изображений</h3>
+            <p>Обработка графических файлов с сохранением качества и оптимизацией размера</p>
+            <ul>
+                <li>Конвертация между JPG, PNG, WebP, AVIF, TIFF и другими форматами</li>
+                <li>Изменение разрешения с сохранением пропорций</li>
+                <li>Настраиваемое качество сжатия</li>
+                <li>Удаление метаданных для уменьшения размера</li>
+            </ul>
+        </div>
+
+        <div class="feature-card" @onclick="GoToVideo">
+            <div class="feature-icon"><i class="bi bi-camera-video"></i></div>
+            <h3>Видео конвертер</h3>
+            <p>Транскодирование видео с выбором кодеков и параметров сжатия</p>
+            <ul>
+                <li>Поддержка MP4, AVI, MKV, MOV, WMV и других контейнеров</li>
+                <li>Выбор видеокодека: H.264, H.265/HEVC, MPEG-4</li>
+                <li>Настройка качества через CRF или битрейт</li>
+                <li>Сохранение пользовательских профилей настроек</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Второй ряд: новые функции по центру -->
+    <div class="features-grid-secondary">
+        <div class="feature-card @NewDownloadsClass" @onclick="GoToDownloads">
+            <div class="feature-icon"><i class="bi bi-cloud-download"></i></div>
+            <h3>Загрузка медиа</h3>
+            <p>Скачивание аудио и видео с популярных платформ и социальных сетей</p>
+            <ul>
+                <li>Поддержка YouTube, TikTok, SoundCloud, VK и 1800+ сайтов</li>
+                <li>Загрузка отдельных файлов и целых плейлистов</li>
+                <li>Автоматическое извлечение аудиодорожки</li>
+                <li>История загрузок с возможностью повторного скачивания</li>
+            </ul>
+        </div>
+
+        <div class="feature-card @NewBatchClass" @onclick="GoToBatch">
+            <div class="feature-icon"><i class="bi bi-lightning-charge"></i></div>
+            <h3>Пакетная обработка</h3>
+            <p>Массовая конвертация файлов с едиными настройками для всей группы</p>
+            <ul>
+                <li>Одновременная обработка аудио, видео и изображений</li>
+                <li>Добавление файлов вручную или целыми папками</li>
+                <li>Автоматическая проверка форматов и содержимого файлов</li>
+                <li>Отслеживание прогресса с детальной статистикой</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<style>
+    .welcome-container {
+        padding: 2rem;
+    }
+
+    .welcome-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+
+        .welcome-header h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+            .welcome-header h1 i {
+                -webkit-text-fill-color: initial;
+                margin-right: 0.5rem;
+            }
+
+    .lead {
+        font-size: 1.25rem;
+        opacity: 0.8;
+    }
+
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .features-grid-secondary {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+
+        .features-grid-secondary .feature-card {
+            flex: 0 1 calc(33.333% - 1.33rem);
+            max-width: calc(33.333% - 1.33rem);
+        }
+
+    .feature-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        border: 2px solid rgba(102, 126, 234, 0.3);
+        border-radius: 20px;
+        padding: 2rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+    }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+
+    .feature-card-primary {
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(23, 162, 184, 0.1) 100%);
+        border-color: rgba(40, 167, 69, 0.4);
+        position: relative;
+    }
+
+        .feature-card-primary::before {
+            content: "NEW";
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: linear-gradient(135deg, #28a745 0%, #17a2b8 100%);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 12px;
+            letter-spacing: 1px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+    @@keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.05);
+        }
+    }
+
+    .feature-card-primary:hover {
+        box-shadow: 0 20px 40px rgba(40, 167, 69, 0.3);
+        border-color: #28a745;
+    }
+
+    .feature-icon {
+        font-size: 4rem;
+        text-align: center;
+        margin-bottom: 1rem;
+        color: #667eea;
+    }
+
+    .feature-card-primary .feature-icon {
+        color: #28a745;
+    }
+
+    .feature-card h3 {
+        text-align: center;
+        margin-bottom: 1rem;
+        color: inherit;
+    }
+
+    .feature-card > p {
+        text-align: center;
+        opacity: 0.8;
+        margin-bottom: 1.5rem;
+    }
+
+    .feature-card ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+        .feature-card ul li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+            .feature-card ul li::before {
+                content: "✓";
+                position: absolute;
+                left: 0;
+                color: #667eea;
+                font-weight: bold;
+            }
+
+    .feature-card-primary ul li::before {
+        color: #28a745;
+    }
+
+    body.dark-theme .feature-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+        border-color: rgba(102, 126, 234, 0.5);
+    }
+
+        body.dark-theme .feature-card:hover {
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.4);
+        }
+
+    body.dark-theme .feature-card-primary {
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.2) 0%, rgba(23, 162, 184, 0.2) 100%);
+        border-color: rgba(40, 167, 69, 0.6);
+    }
+
+        body.dark-theme .feature-card-primary:hover {
+            box-shadow: 0 20px 40px rgba(40, 167, 69, 0.4);
+        }
+
+    @@media (max-width: 1024px) {
+        .features-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .features-grid-secondary .feature-card {
+            flex: 0 1 calc(50% - 1rem);
+            max-width: calc(50% - 1rem);
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .welcome-header h1 {
+            font-size: 2rem;
+        }
+
+        .features-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .features-grid-secondary .feature-card {
+            flex: 0 1 100%;
+            max-width: 100%;
+        }
+    }
+</style>
+
+@code {
+    private bool _downloadsVisited = false;
+    private bool _batchVisited = false;
+    private DotNetObjectReference<Home>? _dotNetRef;
+
+    private string NewDownloadsClass => _downloadsVisited ? "" : "feature-card-primary";
+    private string NewBatchClass => _batchVisited ? "" : "feature-card-primary";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var downloadsVisited = await JSRuntime.InvokeAsync<string>("eval", "localStorage.getItem('visited_downloads')");
+                var batchVisited = await JSRuntime.InvokeAsync<string>("eval", "localStorage.getItem('visited_batch')");
+
+                _downloadsVisited = downloadsVisited == "true";
+                _batchVisited = batchVisited == "true";
+
+                _dotNetRef = DotNetObjectReference.Create(this);
+                await JSRuntime.InvokeVoidAsync("registerResetKeyHandler", _dotNetRef);
+
+                StateHasChanged();
+            }
+            catch { }
+        }
+    }
+
+    // ===== Отдельные методы для навигации (избегаем проблем с кавычками) =====
+    private void GoToAudio() => NavManager.NavigateTo("/audio");
+    private void GoToImage() => NavManager.NavigateTo("/image");
+    private void GoToVideo() => NavManager.NavigateTo("/video");
+
+    private async Task GoToDownloads()
+    {
+        await MarkVisited("downloads");
+        NavManager.NavigateTo("/downloads");
+    }
+
+    private async Task GoToBatch()
+    {
+        await MarkVisited("batch");
+        NavManager.NavigateTo("/batch");
+    }
+
+    private async Task MarkVisited(string featureName)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", $"localStorage.setItem('visited_{featureName}', 'true')");
+        }
+        catch { }
+
+        if (featureName == "downloads") _downloadsVisited = true;
+        else if (featureName == "batch") _batchVisited = true;
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task ResetNewBadges()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "localStorage.removeItem('visited_downloads')");
+            await JSRuntime.InvokeVoidAsync("eval", "localStorage.removeItem('visited_batch')");
+
+            _downloadsVisited = false;
+            _batchVisited = false;
+
+            StateHasChanged();
+
+            await JSRuntime.InvokeVoidAsync("showToast",
+                "🔄 Бейджи NEW сброшены!", "info");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", $"Ошибка сброса: {ex.Message}", "error");
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key.ToLower() == "z" && !e.CtrlKey && !e.AltKey && !e.ShiftKey && !e.MetaKey)
+        {
+            var isInInput = await JSRuntime.InvokeAsync<bool>("eval",
+                "['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName || '')");
+
+            if (!isInInput)
+            {
+                await ResetNewBadges();
+            }
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

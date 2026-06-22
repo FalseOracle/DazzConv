@@ -1,0 +1,731 @@
+﻿@page "/audio"
+@using ConverToDazz.Core.Services
+@using ConverToDazz.Core.Models
+@using DazzConv.Services
+@inject AudioConverterService AudioService
+@inject FFmpegPathService FFmpegService
+@inject LoggerService Logger
+@inject IJSRuntime JSRuntime
+@inject HotkeyService Hotkeys
+
+
+<h3 class="text-center mb-4">Аудио Конвертер</h3>
+
+<div class="card mb-4" id="uploadSection">
+    <div class="card-body text-center">
+        <button class="btn btn-primary btn-lg" @onclick="SelectFile">
+            <i class="bi bi-music-note-list"></i> Выбрать аудио файл
+        </button>
+        <p class="text-muted mt-2 mb-0">Поддерживаемые форматы: MP3, WAV, OGG, FLAC, AAC, WMA, M4A, OPUS</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(InputFilePath))
+{
+    <div class="row">
+        <!-- Информация о файле -->
+        <div class="col-md-12 mb-4" id="fileInfoSection">
+            <div class="card bg-light">
+                <div class="card-header">
+                    <h5 class="mb-0">📊 Информация о файле</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <strong>📁 Файл:</strong><br />
+                            <span class="text-break">@FileName</span>
+                        </div>
+                        <div class="col-md-4">
+                            <strong>⏱️ Длительность:</strong><br />
+                            <span>@Duration.ToString(@"mm\:ss")</span>
+                        </div>
+                        <div class="col-md-4">
+                            <strong>🎵 Битрейт:</strong><br />
+                            <span>@Bitrate kbps</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Настройки конвертации -->
+        <div class="col-md-6 mb-4" id="settingsSection">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🔄 Настройки конвертации</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Исходный формат:</strong></label>
+                        <input type="text" class="form-control" value="@InputFormat" disabled />
+                    </div>
+
+                    <div class="text-center my-3">
+                        <h3>⬇️</h3>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Выходной формат:</strong></label>
+                        <select class="form-select form-select-lg" value="@OutputFormat" @onchange="OnFormatChanged">
+                            @foreach (var format in Formats)
+                            {
+                                <option value="@format">@format.ToUpper() @(GetFormatDescription(format))</option>
+                            }
+                        </select>
+                        <div class="form-text">@GetFormatHelpText(OutputFormat)</div>
+                    </div>
+
+                    @if (ShowBitrateOptions)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Аудио битрейт: @OutputBitrate kbps</strong></label>
+                            <input type="range" class="form-range" min="64" max="320" step="32"
+                                   value="@OutputBitrate" @oninput="OnBitrateChanged" />
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">64 kbps</small>
+                                <small class="text-muted">128 kbps</small>
+                                <small class="text-muted">192 kbps</small>
+                                <small class="text-muted">320 kbps</small>
+                            </div>
+                        </div>
+                    }
+
+                    @if (ShowSampleRateOptions)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Частота дискретизации:</strong></label>
+                            <select class="form-select" @bind="SampleRate">
+                                <option value="0">Оригинальная</option>
+                                <option value="44100">44100 Hz (CD)</option>
+                                <option value="48000">48000 Hz (DVD)</option>
+                                <option value="96000">96000 Hz (Hi-Res)</option>
+                            </select>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="NormalizeAudio" id="normalizeCheck" />
+                            <label class="form-check-label" for="normalizeCheck">Нормализовать громкость</label>
+                        </div>
+                        <div class="form-text">Выровнять уровень громкости</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Быстрые пресеты -->
+        <div class="col-md-6 mb-4" id="presetsSection">
+            <div class="card h-100 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Быстрые пресеты</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">Готовые настройки:</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("music"))">
+                            <strong>🎵 Музыка (320 kbps)</strong>
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("podcast"))">
+                            <strong>🎙️ Подкаст (128 kbps)</strong>
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("audiobook"))">
+                            <strong>📚 Аудиокнига (64 kbps)</strong>
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("lossless"))">
+                            <strong>💎 FLAC (без потерь)</strong>
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("phone"))">
+                            <strong>📱 Телефон (AAC 192)</strong>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопки управления -->
+        <div class="col-md-12 mb-4" id="controlsSection">
+            <div class="card">
+                <div class="card-body text-center">
+                    <button class="btn btn-success btn-lg me-2" @onclick="StartConversion" disabled="@IsConverting">
+                        <i class="bi bi-play-circle"></i> @(IsConverting ? "Конвертация..." : "Начать конвертацию")
+                    </button>
+                    <button class="btn btn-danger btn-lg" @onclick="CancelConversion" disabled="@(!IsConverting)">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Прогресс -->
+        @if (IsConverting || Progress > 0)
+        {
+            <div class="col-md-12 mb-4" id="progressSection">
+                <div class="card border-warning">
+                    <div class="card-body">
+                        <h5>⏳ Прогресс конвертации</h5>
+                        <div class="progress" style="height: 40px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark"
+                                 role="progressbar" style="width: @Progress%">
+                                <strong>@Progress%</strong>
+                            </div>
+                        </div>
+                        <p class="text-center mt-2 mb-0 text-muted">@ConversionStatus</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Результат -->
+        @if (IsConverted)
+        {
+            <div class="col-md-12 mb-4" id="resultSection">
+                <div class="card border-success bg-light shadow-lg">
+                    <div class="card-body text-center p-5">
+                        <h2 class="text-success mb-3">
+                            <i class="bi bi-check-circle-fill"></i> Конвертация завершена!
+                        </h2>
+                        <p class="lead mb-4">
+                            Файл успешно сконвертирован в формат <strong>@OutputFormat.ToUpper()</strong><br />
+                            <small class="text-muted">
+                                Размер: @GetConvertedSize()
+                                @if (OriginalSize > 0 && ConvertedSize > 0)
+                                {
+                                    var change = ((double)(ConvertedSize - OriginalSize) / OriginalSize * 100);
+                                    <span class="@((change < 0) ? "text-success" : "text-danger")">
+                                        (@(change > 0 ? "+" : "")@change.ToString("F1")%)
+                                    </span>
+                                }
+                            </small>
+                        </p>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <button class="btn btn-primary btn-lg" @onclick="SaveFile">
+                                <i class="bi bi-download"></i> Сохранить файл
+                            </button>
+                            <button class="btn btn-info btn-lg" @onclick="OpenFolder">
+                                <i class="bi bi-folder2-open"></i> Открыть папку
+                            </button>
+                            <button class="btn btn-secondary btn-lg" @onclick="ResetConverter">
+                                <i class="bi bi-arrow-clockwise"></i> Новый файл
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private string FileName = "";
+    private TimeSpan Duration;
+    private int Bitrate;
+    private string InputFormat = "";
+    private string OutputFormat = "mp3";
+    private int OutputBitrate = 192;
+    private int SampleRate = 0;
+    private bool NormalizeAudio = false;
+    private bool IsConverting = false;
+    private bool IsConverted = false;
+    private int Progress = 0;
+    private string ConversionStatus = "Готов к работе";
+    private string? InputFilePath;
+    private string? ConvertedFilePath;
+    private CancellationTokenSource? Cts;
+    private string[] Formats = { "mp3", "wav", "ogg", "flac", "aac", "wma", "m4a", "opus" };
+    private long OriginalSize;
+    private long ConvertedSize;
+
+    private bool ShowBitrateOptions => OutputFormat is "mp3" or "aac" or "ogg" or "opus" or "wma";
+    private bool ShowSampleRateOptions => OutputFormat is "wav" or "flac";
+
+    // Разрешённые расширения (аудио + видео для извлечения дорожки)
+    private readonly string[] AllowedAudioExtensions = { "mp3", "wav", "flac", "ogg", "aac", "wma", "m4a", "opus", "ac3", "aiff" };
+    private readonly string[] AllowedVideoExtensions = { "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpeg", "mpg", "3gp" };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Подписываемся на горячие клавиши
+                Hotkeys.OnCancelRequested += HandleCancel;
+
+                // Инициализируем с защитой от ошибок
+                await Hotkeys.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                // Если горячие клавиши не работают — это не критично
+                // Логируем и продолжаем работу
+                try
+                {
+                    Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}");
+                }
+                catch { }
+            }
+        }
+    }
+
+    private async Task HandleOpen()
+    {
+        await SelectFile(); // или TriggerFileInput()
+    }
+
+    private async Task HandleSave()
+    {
+        await SaveFile();
+    }
+
+    private async Task HandleCancel()
+    {
+        if (IsConverting) CancelConversion();  
+    }
+
+
+    private async Task SelectFile()
+    {
+        try
+        {
+            var result = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Выберите аудио или видео файл"
+            });
+
+            if (result == null) return;
+
+            await ResetConverter();
+
+            InputFilePath = result.FullPath;
+            FileName = Path.GetFileName(InputFilePath);
+            InputFormat = Path.GetExtension(InputFilePath).TrimStart('.').ToLower();
+
+            // ПРОВЕРКА 1: Расширение
+            bool isAudio = AllowedAudioExtensions.Contains(InputFormat);
+            bool isVideo = AllowedVideoExtensions.Contains(InputFormat);
+
+            if (!isAudio && !isVideo)
+            {
+                Logger.LogWarning($"Аудио конвертер: отклонён файл с недопустимым расширением .{InputFormat} - {FileName}");
+                await ShowToast($"❌ Формат .{InputFormat.ToUpper()} не поддерживается!\n\nВыберите аудио или видео файл.", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            // ПРОВЕРКА 2: Размер файла
+            var fileInfo = new FileInfo(InputFilePath);
+            if (fileInfo.Length == 0)
+            {
+                Logger.LogWarning($"Аудио конвертер: отклонён пустой файл - {FileName}");
+                await ShowToast($"❌ Файл пустой (0 байт)!", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            if (fileInfo.Length > 2L * 1024 * 1024 * 1024)
+            {
+                Logger.LogWarning($"Аудио конвертер: отклонён слишком большой файл - {FileName} ({fileInfo.Length} байт)");
+                await ShowToast($"❌ Файл слишком большой (максимум 2 ГБ)!", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            // ПРОВЕРКА 3: Magic numbers (только для аудио)
+            if (isAudio && !ValidateAudioContent(InputFilePath, InputFormat))
+            {
+                Logger.LogWarning($"Аудио конвертер: отклонён файл с неверным содержимым - {FileName}");
+                await ShowToast($"❌ Содержимое файла не соответствует формату {InputFormat.ToUpper()}!\n\nВозможно, файл переименован или повреждён.", ToastType.Error);
+                InputFilePath = null;
+                FileName = "";
+                return;
+            }
+
+            OriginalSize = fileInfo.Length;
+
+            if (isVideo)
+            {
+                Logger.LogInfo($"Аудио конвертер: загружено видео для извлечения аудио - {FileName}");
+                await ShowToast($"ℹ️ Видео файл ({InputFormat.ToUpper()})\n\nБудет извлечена аудиодорожка.", ToastType.Info);
+            }
+            else
+            {
+                Logger.LogInfo($"Аудио конвертер: загружен аудио файл - {FileName} ({OriginalSize} байт)");
+            }
+
+            var ffmpegPath = FFmpegService.GetFFmpegPath();
+            var info = await AudioFileInfo.FromFileAsync(ffmpegPath, InputFilePath);
+            Duration = info.Duration;
+            Bitrate = info.Bitrate;
+
+            StateHasChanged();
+            await ScrollToElement("fileInfoSection");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Аудио конвертер: ошибка выбора файла", ex);
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    // Проверка magic numbers для аудио
+    private bool ValidateAudioContent(string filePath, string extension)
+    {
+        try
+        {
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length < 4) return false;
+
+            var buffer = new byte[12];
+            using var fs = File.OpenRead(filePath);
+            fs.Read(buffer, 0, Math.Min(12, (int)fileInfo.Length));
+
+            return extension.ToLower() switch
+            {
+                ".mp3" => (buffer[0] == 0xFF && (buffer[1] & 0xE0) == 0xE0) ||
+                          (buffer[0] == 0x49 && buffer[1] == 0x44 && buffer[2] == 0x33),
+                ".wav" => buffer[0] == 0x52 && buffer[1] == 0x49 && buffer[2] == 0x46 && buffer[3] == 0x46,
+                ".flac" => buffer[0] == 0x66 && buffer[1] == 0x4C && buffer[2] == 0x61 && buffer[3] == 0x43,
+                ".ogg" => buffer[0] == 0x4F && buffer[1] == 0x67 && buffer[2] == 0x67 && buffer[3] == 0x53,
+                ".aac" => true,
+                ".m4a" => buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 && buffer[7] == 0x70,
+                ".wma" => true,
+                ".opus" => true,
+                ".ac3" => true,
+                ".aiff" => buffer[0] == 0x46 && buffer[1] == 0x4F && buffer[2] == 0x52 && buffer[3] == 0x4D,
+                _ => true
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Ошибка проверки magic numbers: {filePath}", ex);
+            return true; // При ошибке - разрешаем
+        }
+    }
+
+    private async Task StartConversion()
+    {
+        if (string.IsNullOrEmpty(InputFilePath))
+        {
+            await ShowToast("⚠️ Выберите файл", ToastType.Warning);
+            return;
+        }
+
+        IsConverting = true;
+        IsConverted = false;
+        Progress = 0;
+        ConversionStatus = "Инициализация...";
+        Cts = new CancellationTokenSource();
+
+        var ffmpegPath = FFmpegService.GetFFmpegPath();
+        ConvertedFilePath = Path.Combine(Path.GetTempPath(),
+            Path.GetFileNameWithoutExtension(FileName) + "_converted." + OutputFormat);
+
+        var progressReporter = new Progress<int>(value =>
+        {
+            Progress = Math.Max(0, Math.Min(100, value));
+            ConversionStatus = GetConversionStatusText();
+            InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            bool isVideo = AllowedVideoExtensions.Contains(InputFormat);
+
+            if (isVideo)
+            {
+                await ExtractAudioFromVideo(ffmpegPath, InputFilePath, ConvertedFilePath,
+                    Duration, progressReporter, Cts.Token);
+            }
+            else
+            {
+                await AudioService.ConvertAsync(ffmpegPath, InputFilePath, ConvertedFilePath,
+                    Duration, progressReporter, Cts.Token);
+            }
+
+            if (!File.Exists(ConvertedFilePath))
+            {
+                throw new Exception("Файл не создан");
+            }
+
+            // Устанавливаем размер конвертированного файла
+            ConvertedSize = new FileInfo(ConvertedFilePath).Length;
+
+            IsConverted = true;
+            ConversionStatus = "Готово!";
+            StateHasChanged();
+
+            Logger.LogInfo($"Аудио конвертер: конвертация завершена - {FileName} -> {Path.GetFileName(ConvertedFilePath)} ({ConvertedSize} байт)");
+            await ShowToast("✅ Конвертация завершена!", ToastType.Success);
+            await ScrollToElement("resultSection");
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogInfo($"Аудио конвертер: конвертация отменена пользователем");
+            await HandleConversionError("Конвертация отменена");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Аудио конвертер: ошибка конвертации", ex);
+            await HandleConversionError($"Ошибка: {ex.Message}");
+        }
+        finally
+        {
+            if (!IsConverted)
+            {
+                IsConverting = false;
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleConversionError(string message)
+    {
+        if (!string.IsNullOrEmpty(ConvertedFilePath) && File.Exists(ConvertedFilePath))
+        {
+            try { File.Delete(ConvertedFilePath); } catch { }
+        }
+
+        IsConverting = false;
+        IsConverted = false;
+        Progress = 0;
+        ConversionStatus = "Ошибка: " + message;
+        ConvertedFilePath = null;
+        await ShowToast($"❌ {message}", ToastType.Error);
+    }
+
+    private async Task ExtractAudioFromVideo(string ffmpegPath, string inputPath, string outputPath,
+        TimeSpan duration, IProgress<int> progress, CancellationToken token)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = ffmpegPath,
+            Arguments = $"-y -i \"{inputPath}\" -vn -acodec {GetAudioCodecForFormat(OutputFormat)} -b:a {OutputBitrate}k -progress pipe:1 -nostats \"{outputPath}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = new System.Diagnostics.Process { StartInfo = psi, EnableRaisingEvents = true };
+        process.Start();
+
+        // Читаем прогресс из StandardOutput (не StandardError!)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!process.StandardOutput.EndOfStream && !token.IsCancellationRequested)
+                {
+                    var line = await process.StandardOutput.ReadLineAsync();
+                    if (line == null) break;
+
+                    if (line.StartsWith("out_time_ms=") && long.TryParse(line.Replace("out_time_ms=", ""), out long ms))
+                    {
+                        if (duration.TotalMilliseconds > 0)
+                        {
+                            int percent = (int)Math.Min(100, Math.Max(0, ms / duration.TotalMilliseconds * 100));
+                            progress.Report(percent);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }, token);
+
+        // Пустой reader для stderr чтобы процесс не завис
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!process.StandardError.EndOfStream && !token.IsCancellationRequested)
+                    await process.StandardError.ReadLineAsync();
+            }
+            catch { }
+        }, token);
+
+        await process.WaitForExitAsync(token);
+
+        if (token.IsCancellationRequested)
+            throw new OperationCanceledException(token);
+
+        progress.Report(100);
+    }
+
+    private string GetAudioCodecForFormat(string format)
+    {
+        return format switch
+        {
+            "mp3" => "libmp3lame",
+            "aac" => "aac",
+            "ogg" => "libvorbis",
+            "opus" => "libopus",
+            "wma" => "wmav2",
+            "m4a" => "aac",
+            _ => "libmp3lame"
+        };
+    }
+
+    private void CancelConversion() => Cts?.Cancel();
+
+    private async Task SaveFile()
+    {
+        if (string.IsNullOrEmpty(ConvertedFilePath) || !File.Exists(ConvertedFilePath))
+        {
+            await ShowToast("❌ Файл не найден", ToastType.Error);
+            return;
+        }
+
+        try
+        {
+            var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для сохранения");
+            if (string.IsNullOrEmpty(folder))
+            {
+                await ShowToast("⚠️ Сохранение отменено", ToastType.Warning);
+                return;
+            }
+
+            var suggestedName = Path.GetFileName(ConvertedFilePath);
+            var savePath = Path.Combine(folder, suggestedName);
+
+            File.Copy(ConvertedFilePath, savePath, true);
+            Logger.LogInfo($"Аудио конвертер: файл сохранён - {savePath}");
+            await ShowToast($"✅ Файл сохранён:\n{savePath}", ToastType.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Аудио конвертер: ошибка сохранения", ex);
+            await ShowToast($"❌ Ошибка сохранения: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private void OpenFolder()
+    {
+        if (string.IsNullOrEmpty(ConvertedFilePath) || !File.Exists(ConvertedFilePath))
+        {
+            Logger.LogWarning("Аудио конвертер: файл для открытия не найден");
+            return;
+        }
+
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{ConvertedFilePath}\"",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+            Logger.LogInfo($"Аудио конвертер: открыта папка с файлом {ConvertedFilePath}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Аудио конвертер: ошибка открытия папки", ex);
+        }
+    }
+
+    private async Task ResetConverter()
+    {
+        InputFilePath = null;
+        FileName = "";
+        InputFormat = "";
+        OutputFormat = "mp3";
+        OutputBitrate = 192;
+        SampleRate = 0;
+        NormalizeAudio = false;
+        IsConverting = false;
+        IsConverted = false;
+        Progress = 0;
+        ConversionStatus = "Готов к работе";
+        ConvertedFilePath = null;
+        OriginalSize = 0;
+        ConvertedSize = 0;
+        Cts?.Dispose();
+        Cts = null;
+
+        await ScrollToTop();
+        StateHasChanged();
+    }
+
+    private void ApplyPreset(string presetName)
+    {
+        switch (presetName)
+        {
+            case "music": OutputFormat = "mp3"; OutputBitrate = 320; NormalizeAudio = true; break;
+            case "podcast": OutputFormat = "mp3"; OutputBitrate = 128; NormalizeAudio = true; break;
+            case "audiobook": OutputFormat = "mp3"; OutputBitrate = 64; NormalizeAudio = true; break;
+            case "lossless": OutputFormat = "flac"; NormalizeAudio = false; break;
+            case "phone": OutputFormat = "aac"; OutputBitrate = 192; NormalizeAudio = true; break;
+        }
+        StateHasChanged();
+    }
+
+    private void OnFormatChanged(ChangeEventArgs e) { OutputFormat = e.Value?.ToString() ?? "mp3"; StateHasChanged(); }
+    private void OnBitrateChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out int b)) OutputBitrate = b; StateHasChanged(); }
+
+    private string GetFormatDescription(string format) => format switch
+    {
+        "mp3" => "(универсальный)",
+        "wav" => "(без сжатия)",
+        "ogg" => "(открытый)",
+        "flac" => "(без потерь)",
+        "aac" => "(лучше MP3)",
+        "wma" => "(Windows)",
+        "m4a" => "(Apple)",
+        "opus" => "(современный)",
+        _ => ""
+    };
+
+    private string GetFormatHelpText(string format) => format switch
+    {
+        "mp3" => "Самый популярный формат",
+        "wav" => "Без сжатия, большой размер",
+        "ogg" => "Открытый формат",
+        "flac" => "Сжатие без потерь",
+        "aac" => "Лучше чем MP3",
+        "wma" => "Windows Media Audio",
+        "m4a" => "Apple iTunes",
+        "opus" => "Современный кодек",
+        _ => ""
+    };
+
+    private bool HasEnoughDiskSpace(string path, long requiredBytes)
+    {
+        var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!);
+        return drive.AvailableFreeSpace > requiredBytes;
+    }
+
+    private string GetConvertedSize()
+    {
+        if (ConvertedSize == 0) return "";
+        const long kb = 1024, mb = kb * 1024;
+        if (ConvertedSize >= mb) return $"{(ConvertedSize / (double)mb):F2} MB";
+        if (ConvertedSize >= kb) return $"{(ConvertedSize / (double)kb):F2} KB";
+        return $"{ConvertedSize} B";
+    }
+
+    private string GetConversionStatusText()
+    {
+        if (Progress < 10) return "🔄 Инициализация...";
+        if (Progress < 30) return "📥 Чтение файла...";
+        if (Progress < 50) return "🎵 Кодирование...";
+        if (Progress < 75) return "⚡ Обработка...";
+        if (Progress < 95) return "💾 Запись файла...";
+        if (Progress < 100) return "✨ Завершение...";
+        return "✅ Готово!";
+    }
+
+    private async Task ScrollToElement(string elementId) { try { await JSRuntime.InvokeVoidAsync("scrollToElement", elementId); } catch { } }
+    private async Task ScrollToTop() { try { await JSRuntime.InvokeVoidAsync("scrollToTop"); } catch { } }
+
+    private async Task ShowToast(string message, ToastType type = ToastType.Info)
+    {
+        try { await JSRuntime.InvokeVoidAsync("showToast", message, type.ToString().ToLower()); }
+        catch { await JSRuntime.InvokeVoidAsync("alert", message); }
+    }
+
+    private enum ToastType { Success, Error, Warning, Info }
+}
