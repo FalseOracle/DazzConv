@@ -6,7 +6,7 @@ namespace DazzConv.Services;
 public class UpdateService
 {
     private readonly LoggerService _logger;
-    public const string CurrentVersion = "1.0.0";
+    public const string CurrentVersion = "1.0.1";
     private const string RepoUrl = "https://github.com/FalseOracle/DazzConv";
 
     public UpdateService(LoggerService logger)

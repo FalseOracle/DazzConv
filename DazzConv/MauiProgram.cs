@@ -20,12 +20,12 @@ namespace DazzConv
                     events.AddWindows(windows => windows
                         .OnWindowCreated((window) =>
                         {
-                            // Фоновая проверка обновлений через 10 секунд после создания окна
+                            //фоновая проверка обновлений через 10 секунд после создания окна
                             _ = Task.Run(async () =>
                             {
                                 try
                                 {
-                                    await Task.Delay(10000); // Ждём 10 сек
+                                    await Task.Delay(10000); 
 
                                     var services = IPlatformApplication.Current!.Services;
                                     var updateService = services.GetRequiredService<UpdateService>();
@@ -61,14 +61,12 @@ namespace DazzConv
                                 }
                                 catch (Exception ex)
                                 {
-                                    // Игнорируем ошибки автопроверки
                                     System.Diagnostics.Debug.WriteLine($"Ошибка автопроверки: {ex.Message}");
                                 }
                             });
                         }));
 #endif
                 })
-                // 🆕 КОНЕЦ БЛОКА АВТОПРОВЕРКИ
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -82,15 +80,12 @@ namespace DazzConv
             builder.Logging.AddDebug();
 #endif
 
-            // Регистрация сервисов
             builder.Services.AddSingleton<FFmpegPathService>();
             builder.Services.AddSingleton<AudioConverterService>();
             builder.Services.AddSingleton<ImageConverterService>();
 
-            // Для Video.razor - через интерфейс
             builder.Services.AddSingleton<IVideoConverterService, FfmpegVideoConverterService>();
 
-            // Для BatchConverter.razor - напрямую
             builder.Services.AddSingleton<VideoConverterService>();
 
             builder.Services.AddSingleton<VideoInfoService>();
