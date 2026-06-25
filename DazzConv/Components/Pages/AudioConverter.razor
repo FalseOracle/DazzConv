@@ -2,12 +2,12 @@
 @using ConverToDazz.Core.Services
 @using ConverToDazz.Core.Models
 @using DazzConv.Services
+@using Microsoft.AspNetCore.Components.Forms
 @inject AudioConverterService AudioService
 @inject FFmpegPathService FFmpegService
 @inject LoggerService Logger
 @inject IJSRuntime JSRuntime
 @inject HotkeyService Hotkeys
-
 
 <h3 class="text-center mb-4">Аудио Конвертер</h3>
 
@@ -16,35 +16,33 @@
         <button class="btn btn-primary btn-lg" @onclick="SelectFile">
             <i class="bi bi-music-note-list"></i> Выбрать аудио файл
         </button>
-        <p class="text-muted mt-2 mb-0">Поддерживаемые форматы: MP3, WAV, OGG, FLAC, AAC, WMA, M4A, OPUS</p>
+        <p class="text-muted mt-2 mb-0">
+            18 форматов: MP3, WAV, FLAC, OGG, AAC, WMA, M4A, OPUS, ALAC, AIFF, APE, WV, TTA, AC3, CAF, AMR, SPX, MP2
+        </p>
     </div>
 </div>
 
 @if (!string.IsNullOrEmpty(InputFilePath))
 {
     <div class="row">
-        <!-- Информация о файле -->
-        <div class="col-md-12 mb-4" id="fileInfoSection">
-            <div class="card bg-light">
-                <div class="card-header">
-                    <h5 class="mb-0">📊 Информация о файле</h5>
+        <!-- 🆕 КОМПАКТНАЯ КАРТОЧКА ФАЙЛА (заменяет старый fileInfoSection) -->
+        <div class="col-md-12 mb-4">
+            <div class="file-card">
+                <div class="file-card-icon">
+                    <i class="bi bi-file-earmark-music-fill"></i>
                 </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-md-4">
-                            <strong>📁 Файл:</strong><br />
-                            <span class="text-break">@FileName</span>
-                        </div>
-                        <div class="col-md-4">
-                            <strong>⏱️ Длительность:</strong><br />
-                            <span>@Duration.ToString(@"mm\:ss")</span>
-                        </div>
-                        <div class="col-md-4">
-                            <strong>🎵 Битрейт:</strong><br />
-                            <span>@Bitrate kbps</span>
-                        </div>
+                <div class="file-card-info">
+                    <div class="file-card-name" title="@FileName">@FileName</div>
+                    <div class="file-card-meta">
+                        <span><i class="bi bi-clock"></i> @Duration.ToString(@"mm\:ss")</span>
+                        <span><i class="bi bi-music-note"></i> @Bitrate kbps</span>
+                        <span><i class="bi bi-hdd"></i> @FormatFileSize(OriginalSize)</span>
+                        <span class="badge bg-@GetFormatBadgeColor(InputFormat)">@InputFormat.ToUpper()</span>
                     </div>
                 </div>
+                <button class="btn btn-sm btn-outline-primary" @onclick="ShowFileDetails" title="Подробная информация">
+                    <i class="bi bi-info-circle"></i> Детали
+                </button>
             </div>
         </div>
 
@@ -77,15 +75,24 @@
 
                     @if (ShowBitrateOptions)
                     {
-                        <div class="mb-3">
-                            <label class="form-label"><strong>Аудио битрейт: @OutputBitrate kbps</strong></label>
-                            <input type="range" class="form-range" min="64" max="320" step="32"
-                                   value="@OutputBitrate" @oninput="OnBitrateChanged" />
-                            <div class="d-flex justify-content-between">
-                                <small class="text-muted">64 kbps</small>
-                                <small class="text-muted">128 kbps</small>
-                                <small class="text-muted">192 kbps</small>
-                                <small class="text-muted">320 kbps</small>
+                        <div class="mb-4">
+                            <label class="form-label d-block text-center mb-2">
+                                <strong>Аудио битрейт: @OutputBitrate kbps</strong>
+                            </label>
+
+                            <div class="bitrate-slider-wrapper">
+                                <input type="range"
+                                       class="custom-bitrate-range"
+                                       min="64"
+                                       max="320"
+                                       step="32"
+                                       value="@OutputBitrate"
+                                       @oninput="OnBitrateChanged" />
+
+                                <div class="slider-ticks">
+                                    <span>64</span>
+                                    <span>320</span>
+                                </div>
                             </div>
                         </div>
                     }
@@ -114,30 +121,307 @@
             </div>
         </div>
 
-        <!-- Быстрые пресеты -->
-        <div class="col-md-6 mb-4" id="presetsSection">
-            <div class="card h-100 border-success">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">Быстрые пресеты</h5>
+        <!-- 🆕 БЛОК СОВЕТОВ С ТАБАМИ -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">💡 Какой формат выбрать?</h5>
                 </div>
-                <div class="card-body">
-                    <p class="text-muted mb-3">Готовые настройки:</p>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("music"))">
-                            <strong>🎵 Музыка (320 kbps)</strong>
-                        </button>
-                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("podcast"))">
-                            <strong>🎙️ Подкаст (128 kbps)</strong>
-                        </button>
-                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("audiobook"))">
-                            <strong>📚 Аудиокнига (64 kbps)</strong>
-                        </button>
-                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("lossless"))">
-                            <strong>💎 FLAC (без потерь)</strong>
-                        </button>
-                        <button class="btn btn-outline-primary" @onclick="@(() => ApplyPreset("phone"))">
-                            <strong>📱 Телефон (AAC 192)</strong>
-                        </button>
+
+                <!-- 🆕 ТАБЫ КАТЕГОРИЙ -->
+                <div class="tip-tabs">
+                    <button class="tip-tab @(_activeCategory == CategoryPopular ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryPopular))">
+                        <i class="bi bi-music-note-list"></i>
+                        <span>Популярные</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategoryLossless ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryLossless))">
+                        <i class="bi bi-gem"></i>
+                        <span>Lossless</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategoryVideo ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryVideo))">
+                        <i class="bi bi-film"></i>
+                        <span>Монтаж</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategoryVoice ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryVoice))">
+                        <i class="bi bi-mic"></i>
+                        <span>Голос</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategorySpecial ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategorySpecial))">
+                        <i class="bi bi-tools"></i>
+                        <span>Спец.</span>
+                    </button>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="format-tips fade-in">
+                        <!-- 🎵 ПОПУЛЯРНЫЕ -->
+                        @if (_activeCategory == "popular")
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("mp3", 320))">
+                                <div class="format-tip-icon mp3">
+                                    <i class="bi bi-music-note-beamed"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        MP3 320 kbps
+                                        <span class="badge bg-success ms-1">Популярный</span>
+                                    </div>
+                                    <div class="format-tip-desc">Для музыки, телефона, плеера</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("mp3", 128))">
+                                <div class="format-tip-icon podcast">
+                                    <i class="bi bi-mic"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">MP3 128 kbps</div>
+                                    <div class="format-tip-desc">Для подкастов, аудиокниг</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("aac", 192))">
+                                <div class="format-tip-icon aac">
+                                    <i class="bi bi-apple"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">AAC 192 kbps</div>
+                                    <div class="format-tip-desc">Для iPhone, iPad, Apple Music</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("ogg", 192))">
+                                <div class="format-tip-icon ogg">
+                                    <i class="bi bi-file-music"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        OGG 192 kbps
+                                        <span class="badge bg-info ms-1">Открытый</span>
+                                    </div>
+                                    <div class="format-tip-desc">Без патентов, Linux, игры</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("m4a", 256))">
+                                <div class="format-tip-icon m4a">
+                                    <i class="bi bi-apple"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">M4A 256 kbps</div>
+                                    <div class="format-tip-desc">Apple iTunes, лучше чем MP3</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 💎 LOSSLESS -->
+                        @if (_activeCategory == "lossless")
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("flac", 0))">
+                                <div class="format-tip-icon flac">
+                                    <i class="bi bi-gem"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        FLAC
+                                        <span class="badge bg-warning text-dark ms-1">Топ</span>
+                                    </div>
+                                    <div class="format-tip-desc">Архив, аудиофилы, универсальный lossless</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("wav", 0))">
+                                <div class="format-tip-icon wav">
+                                    <i class="bi bi-soundwave"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">WAV</div>
+                                    <div class="format-tip-desc">DAW, студии, без сжатия</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("alac", 0))">
+                                <div class="format-tip-icon alac">
+                                    <i class="bi bi-apple"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">ALAC</div>
+                                    <div class="format-tip-desc">Apple Lossless для iTunes и iPhone</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("aiff", 0))">
+                                <div class="format-tip-icon aiff">
+                                    <i class="bi bi-mac"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        AIFF
+                                        <span class="badge bg-info ms-1">Pro</span>
+                                    </div>
+                                    <div class="format-tip-desc">Для Mac, видеомонтажа (Final Cut, Logic)</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 🎬 ВИДЕОМОНТАЖ -->
+                        @if (_activeCategory == "video")
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("ac3", 384))">
+                                <div class="format-tip-icon ac3">
+                                    <i class="bi bi-film"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        AC3 (Dolby)
+                                        <span class="badge bg-danger ms-1">Кино</span>
+                                    </div>
+                                    <div class="format-tip-desc">DVD, Blu-ray, 5.1 surround</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("caf", 0))">
+                                <div class="format-tip-icon caf">
+                                    <i class="bi bi-camera-reels"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">CAF</div>
+                                    <div class="format-tip-desc">Core Audio для iOS/macOS видеомонтажа</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("wav", 0))">
+                                <div class="format-tip-icon wav">
+                                    <i class="bi bi-soundwave"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        WAV (PCM)
+                                        <span class="badge bg-primary ms-1">Стандарт</span>
+                                    </div>
+                                    <div class="format-tip-desc">Adobe Premiere, DaVinci Resolve</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("aiff", 0))">
+                                <div class="format-tip-icon aiff">
+                                    <i class="bi bi-mac"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">AIFF</div>
+                                    <div class="format-tip-desc">Final Cut Pro, Logic Pro</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 🎙️ ГОЛОС -->
+                        @if (_activeCategory == "voice")
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("opus", 64))">
+                                <div class="format-tip-icon opus">
+                                    <i class="bi bi-broadcast"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        OPUS 64 kbps
+                                        <span class="badge bg-info ms-1">Топ</span>
+                                    </div>
+                                    <div class="format-tip-desc">Discord, звонки, стриминг речи</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("mp3", 96))">
+                                <div class="format-tip-icon mp3">
+                                    <i class="bi bi-mic-fill"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">MP3 96 kbps</div>
+                                    <div class="format-tip-desc">Подкасты, интервью, лекции</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("amr", 12))">
+                                <div class="format-tip-icon amr">
+                                    <i class="bi bi-telephone"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">AMR</div>
+                                    <div class="format-tip-desc">Мобильная запись, диктофоны, 3GPP</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("spx", 32))">
+                                <div class="format-tip-icon spx">
+                                    <i class="bi bi-chat-audio"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">Speex</div>
+                                    <div class="format-tip-desc">Специально для речи, VoIP</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 🔧 СПЕЦИФИЧНЫЕ -->
+                        @if (_activeCategory == "special")
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("ape", 0))">
+                                <div class="format-tip-icon ape">
+                                    <i class="bi bi-archive"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">APE</div>
+                                    <div class="format-tip-desc">Monkey's Audio — сильное lossless сжатие</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("wv", 0))">
+                                <div class="format-tip-icon wv">
+                                    <i class="bi bi-layers"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">WavPack</div>
+                                    <div class="format-tip-desc">Lossless + hybrid режим</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("tta", 0))">
+                                <div class="format-tip-icon tta">
+                                    <i class="bi bi-file-earmark-zip"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">TTA</div>
+                                    <div class="format-tip-desc">True Audio lossless, быстрое сжатие</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("mp2", 192))">
+                                <div class="format-tip-icon mp2">
+                                    <i class="bi bi-broadcast-pin"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        MP2
+                                        <span class="badge bg-secondary ms-1">Радио</span>
+                                    </div>
+                                    <div class="format-tip-desc">Вещание, DAB радио, MPEG-1</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("wma", 192))">
+                                <div class="format-tip-icon wma">
+                                    <i class="bi bi-windows"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">WMA</div>
+                                    <div class="format-tip-desc">Старые Windows-устройства, Zune</div>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -176,38 +460,41 @@
             </div>
         }
 
-        <!-- Результат -->
-        @if (IsConverted)
+        <!-- Результат конвертации -->
+        @if (!string.IsNullOrEmpty(_outputFilePath))
         {
-            <div class="col-md-12 mb-4" id="resultSection">
-                <div class="card border-success bg-light shadow-lg">
-                    <div class="card-body text-center p-5">
-                        <h2 class="text-success mb-3">
-                            <i class="bi bi-check-circle-fill"></i> Конвертация завершена!
-                        </h2>
-                        <p class="lead mb-4">
-                            Файл успешно сконвертирован в формат <strong>@OutputFormat.ToUpper()</strong><br />
-                            <small class="text-muted">
-                                Размер: @GetConvertedSize()
-                                @if (OriginalSize > 0 && ConvertedSize > 0)
-                                {
-                                    var change = ((double)(ConvertedSize - OriginalSize) / OriginalSize * 100);
-                                    <span class="@((change < 0) ? "text-success" : "text-danger")">
-                                        (@(change > 0 ? "+" : "")@change.ToString("F1")%)
-                                    </span>
-                                }
-                            </small>
-                        </p>
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                            <button class="btn btn-primary btn-lg" @onclick="SaveFile">
-                                <i class="bi bi-download"></i> Сохранить файл
+            <div class="col-md-12 mb-4">
+                <div class="card border-success">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="success-icon me-3">
+                                <i class="bi bi-check-circle-fill"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 text-success">Конвертация завершена!</h6>
+                                <small class="text-muted">
+                                    Файл: @System.IO.Path.GetFileName(_outputFilePath)
+                                    @if (_outputFileSize > 0)
+                                    {
+                                        <span> • @FormatFileSize(_outputFileSize)</span>
+                                    }
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="btn btn-success" @onclick="DownloadFile">
+                                <i class="bi bi-download me-2"></i>Скачать файл
                             </button>
-                            <button class="btn btn-info btn-lg" @onclick="OpenFolder">
-                                <i class="bi bi-folder2-open"></i> Открыть папку
+                            <button class="btn btn-outline-primary" @onclick="OpenFileLocation">
+                                <i class="bi bi-folder2-open me-2"></i>Открыть папку
                             </button>
-                            <button class="btn btn-secondary btn-lg" @onclick="ResetConverter">
-                                <i class="bi bi-arrow-clockwise"></i> Новый файл
-                            </button>
+                            @if (_outputFileSize > 0)
+                            {
+                                <button class="btn btn-outline-secondary" @onclick="ClearResult">
+                                    <i class="bi bi-x-lg me-2"></i>Очистить
+                                </button>
+                            }
                         </div>
                     </div>
                 </div>
@@ -216,7 +503,748 @@
     </div>
 }
 
+<!-- 🆕 МОДАЛЬНОЕ ОКНО С ДЕТАЛЯМИ ФАЙЛА -->
+@if (_showFileDetailsModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content details-modal">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-info-circle me-2"></i>Информация о файле
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseFileDetails"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Заголовок -->
+                    <div class="details-title mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="file-modal-icon me-3">
+                                <i class="bi bi-file-earmark-music-fill"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold mb-1">@FileName</h6>
+                                <small class="text-muted">Исходный аудио файл</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Таблица деталей -->
+                    <div class="details-table">
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-file-earmark text-primary"></i> Формат
+                            </div>
+                            <div class="detail-value">
+                                <span class="badge bg-@GetFormatBadgeColor(InputFormat) fs-6">
+                                    @InputFormat.ToUpper()
+                                </span>
+                                <small class="text-muted ms-2">@GetFormatFullName(InputFormat)</small>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-clock text-info"></i> Длительность
+                            </div>
+                            <div class="detail-value">
+                                @Duration.ToString(@"hh\:mm\:ss")
+                                <small class="text-muted ms-2">(@((int)Duration.TotalSeconds) секунд)</small>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-music-note text-success"></i> Битрейт
+                            </div>
+                            <div class="detail-value">
+                                <strong>@Bitrate kbps</strong>
+                                <small class="text-muted ms-2">@GetBitrateQuality(Bitrate)</small>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-hdd text-warning"></i> Размер
+                            </div>
+                            <div class="detail-value">
+                                <strong>@FormatFileSize(OriginalSize)</strong>
+                                <small class="text-muted ms-2">(@OriginalSize.ToString("N0") байт)</small>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-folder text-secondary"></i> Путь
+                            </div>
+                            <div class="detail-value">
+                                <div class="d-flex align-items-start gap-2">
+                                    <span class="text-break flex-grow-1" title="@InputFilePath">
+                                        @InputFilePath
+                                    </span>
+                                    <button class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                                        @onclick="@(() => CopyToClipboard(InputFilePath ?? string.Empty))"
+                                        title="Скопировать путь">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-check-circle text-success"></i> Файл существует
+                            </div>
+                            <div class="detail-value">
+                                @if (!string.IsNullOrEmpty(InputFilePath) && File.Exists(InputFilePath))
+                                {
+                                    <span class="badge bg-success">✅ Да</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger">❌ Нет</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-primary" @onclick="() => CopyToClipboard(FileName)">
+                        <i class="bi bi-clipboard me-1"></i> Копировать имя
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="@(() => CopyToClipboard(InputFilePath ?? string.Empty))">
+                        <i class="bi bi-link-45deg me-1"></i> Копировать путь
+                    </button>
+                    <button class="btn btn-success" @onclick="OpenInputFileLocation">
+                        <i class="bi bi-folder2-open me-1"></i> Открыть папку
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CloseFileDetails">
+                        <i class="bi bi-x-lg me-1"></i> Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+
+
+    /* Заголовки секций советов */
+    .format-tip-section-title {
+        padding: 0.5rem 1.25rem 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #888;
+        background: rgba(0, 0, 0, 0.02);
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    body.dark-theme .format-tip-section-title {
+        color: #aaa;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom-color: #2a2a3e;
+    }
+
+        /* 🆕 Табы категорий */
+    .tip-tabs {
+        display: flex;
+        gap: 0;
+        padding: 0.5rem 0.5rem 0;
+        background: rgba(13, 202, 240, 0.05);
+        border-bottom: 1px solid rgba(13, 202, 240, 0.15);
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .tip-tabs::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .tip-tabs::-webkit-scrollbar-thumb {
+        background: rgba(13, 202, 240, 0.3);
+        border-radius: 2px;
+    }
+
+    .tip-tab {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 0.875rem;
+        background: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: #666;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .tip-tab:hover {
+        background: rgba(13, 202, 240, 0.08);
+        color: #0dcaf0;
+    }
+
+    .tip-tab.active {
+        color: #0dcaf0;
+        border-bottom-color: #0dcaf0;
+        background: rgba(13, 202, 240, 0.08);
+        font-weight: 600;
+    }
+
+    .tip-tab i {
+        font-size: 1rem;
+    }
+
+    body.dark-theme .tip-tabs {
+        background: rgba(13, 202, 240, 0.08);
+        border-bottom-color: rgba(13, 202, 240, 0.2);
+    }
+
+    body.dark-theme .tip-tab {
+        color: #aaa;
+    }
+
+    body.dark-theme .tip-tab:hover {
+        background: rgba(13, 202, 240, 0.15);
+        color: #0dcaf0;
+    }
+
+    body.dark-theme .tip-tab.active {
+        color: #0dcaf0;
+        border-bottom-color: #0dcaf0;
+        background: rgba(13, 202, 240, 0.12);
+    }
+
+    /* Анимация появления контента табов */
+    .format-tips.fade-in {
+        animation: tipsFadeIn 0.25s ease-out;
+    }
+
+    @@keyframes tipsFadeIn {
+        from {
+            opacity: 0; 
+            transform: translateY(6px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Добавим иконки для новых форматов */
+    .format-tip-icon.ogg,
+    .format-tip-icon.m4a {
+        background: linear-gradient(135deg, #17a2b8 0%, #0d6efd 100%);
+    }
+
+    .format-tip-icon.wma {
+        background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+    }
+
+    .file-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        border-radius: 12px;
+        transition: all 0.2s ease;
+    }
+
+        .file-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+    body.dark-theme .file-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+        border-color: rgba(102, 126, 234, 0.3);
+    }
+
+    .file-card-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .file-card-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .file-card-name {
+        font-weight: 600;
+        font-size: 1rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 0.25rem;
+    }
+
+    body.dark-theme .file-card-name {
+        color: #fff;
+    }
+
+    .file-card-meta {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        font-size: 0.875rem;
+        color: #666;
+    }
+
+        .file-card-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+    body.dark-theme .file-card-meta {
+        color: #aaa;
+    }
+
+    /* Блок советов по форматам */
+    .format-tips {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .format-tip-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.875rem 1.25rem;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .format-tip-item:last-child {
+            border-bottom: none;
+        }
+
+        .format-tip-item:hover {
+            background: rgba(13, 202, 240, 0.05);
+            transform: translateX(4px);
+        }
+
+    body.dark-theme .format-tip-item {
+        border-bottom-color: #2a2a3e;
+    }
+
+        body.dark-theme .format-tip-item:hover {
+            background: rgba(13, 202, 240, 0.1);
+        }
+
+    .format-tip-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+        .format-tip-icon.mp3 {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .format-tip-icon.podcast {
+            background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
+        }
+
+        .format-tip-icon.flac {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+
+        .format-tip-icon.aac {
+            background: linear-gradient(135deg, #6c757d 0%, #343a40 100%);
+        }
+
+        .format-tip-icon.opus {
+            background: linear-gradient(135deg, #0dcaf0 0%, #0d6efd 100%);
+        }
+
+        .format-tip-icon.wav {
+            background: linear-gradient(135deg, #dc3545 0%, #e91e63 100%);
+        }
+
+        .format-tip-icon.alac {
+            background: linear-gradient(135deg, #495057 0%, #212529 100%);
+        }
+
+        .format-tip-icon.aiff {
+            background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+        }
+
+        .format-tip-icon.ac3 {
+            background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+        }
+
+        .format-tip-icon.caf {
+            background: linear-gradient(135deg, #6f42c1 0%, #d63384 100%);
+        }
+
+        .format-tip-icon.amr {
+            background: linear-gradient(135deg, #198754 0%, #0f5132 100%);
+        }
+
+        .format-tip-icon.spx {
+            background: linear-gradient(135deg, #0dcaf0 0%, #17a2b8 100%);
+        }
+
+        .format-tip-icon.ape {
+            background: linear-gradient(135deg, #8b4513 0%, #654321 100%);
+        }
+
+        .format-tip-icon.wv {
+            background: linear-gradient(135deg, #20c997 0%, #0d6e4e 100%);
+        }
+
+        .format-tip-icon.tta {
+            background: linear-gradient(135deg, #fd7e14 0%, #dc6a0f 100%);
+        }
+
+        .format-tip-icon.mp2 {
+            background: linear-gradient(135deg, #6c757d 0%, #343a40 100%);
+        }
+
+    .format-tip-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .format-tip-name {
+        font-weight: 600;
+        margin-bottom: 0.125rem;
+    }
+
+    body.dark-theme .format-tip-name {
+        color: #fff;
+    }
+
+    .format-tip-desc {
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    body.dark-theme .format-tip-desc {
+        color: #aaa;
+    }
+
+    /* Иконка в модалке */
+    .file-modal-icon {
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 2rem;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Стили модального окна (из Downloads) */
+    .details-modal {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+        .details-modal .modal-header {
+            border-bottom: none;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .details-modal .modal-body {
+            padding: 1.5rem;
+        }
+
+    body.dark-theme .details-modal {
+        background: #1e1e2e;
+        color: #e0e0e0;
+    }
+
+        body.dark-theme .details-modal .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        }
+
+        body.dark-theme .details-modal .modal-footer {
+            background: #181825;
+            border-top: 1px solid #2a2a3e;
+        }
+
+        body.dark-theme .details-modal .details-title h6 {
+            color: #fff;
+        }
+
+    .details-table {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    body.dark-theme .details-table {
+        border-color: #3a3a5a;
+        background: #252538;
+    }
+
+    .detail-row {
+        display: flex;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    body.dark-theme .detail-row {
+        border-bottom-color: #2a2a3e;
+    }
+
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        flex: 0 0 140px;
+        font-weight: 600;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    body.dark-theme .detail-label {
+        color: #aaa;
+    }
+
+    .detail-value {
+        flex: 1;
+        word-break: break-word;
+        min-width: 0;
+    }
+
+    body.dark-theme .detail-value {
+        color: #e0e0e0;
+    }
+
+    /* Иконка успеха */
+    .success-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    body.dark-theme .card.bg-light {
+        background: #2a2a3e !important;
+        color: #e0e0e0;
+    }
+
+    body.dark-theme .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.75);
+    }
+
+    /* Кастомный слайдер под дизайн */
+    .bitrate-slider-container {
+        position: relative;
+        padding: 12px 0 20px 0;
+    }
+
+    .custom-range {
+        --bs-range-thumb-bg: #0dcaf0;
+        --bs-range-thumb-border: 2px solid #fff;
+        height: 8px;
+        background: #444;
+        border-radius: 9999px;
+    }
+
+        .custom-range::-webkit-slider-thumb {
+            width: 20px;
+            height: 20px;
+            background: #0dcaf0;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 12px rgba(13, 202, 240, 0.5);
+            margin-top: -6px;
+        }
+
+        .custom-range::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #0dcaf0;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 12px rgba(13, 202, 240, 0.5);
+            margin-top: -6px;
+        }
+
+    .slider-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 6px;
+        padding: 0 4px;
+        font-size: 0.8rem;
+        color: #aaa;
+        user-select: none;
+    }
+
+        .slider-labels span {
+            text-align: center;
+            width: 40px;
+            position: relative;
+        }
+
+            /* Подсветка текущего значения */
+            .slider-labels span:nth-child(1) {
+                width: 30px;
+            }
+
+            .slider-labels span:nth-child(4) {
+                width: 40px;
+                text-align: right;
+            }
+
+            .bitrate-slider-wrapper {
+    position: relative;
+    padding: 15px 10px 30px 10px;
+    background: #1e2333;
+    border-radius: 12px;
+}
+
+.custom-bitrate-range {
+    width: 100%;
+    height: 6px;
+    background: #444c66;
+    border-radius: 9999px;
+    outline: none;
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.custom-bitrate-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    background: #0dcaf0;
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 12px #0dcaf0,
+                0 0 25px rgba(13, 202, 240, 0.6);
+    cursor: pointer;
+    margin-top: -8px;
+}
+
+.custom-bitrate-range::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    background: #0dcaf0;
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 12px #0dcaf0,
+                0 0 25px rgba(13, 202, 240, 0.6);
+    cursor: pointer;
+}
+
+.slider-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding: 0 4px;
+    font-size: 0.82rem;
+    color: #8a94b0;
+    user-select: none;
+}
+
+/* Убираем стандартные метки Bootstrap */
+.form-range {
+    background: transparent;
+}
+    /* Кастомный слайдер под дизайн */
+    .bitrate-slider-wrapper {
+        position: relative;
+        padding: 15px 10px 30px 10px;
+        background: #1e2333;
+        border-radius: 12px;
+    }
+
+    .custom-bitrate-range {
+        width: 100%;
+        height: 6px;
+        background: #444c66;
+        border-radius: 9999px;
+        outline: none;
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+        .custom-bitrate-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            background: #0dcaf0;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #0dcaf0, 0 0 25px rgba(13, 202, 240, 0.6);
+            cursor: pointer;
+            margin-top: -8px;
+        }
+
+        .custom-bitrate-range::-moz-range-thumb {
+            width: 22px;
+            height: 22px;
+            background: #0dcaf0;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #0dcaf0, 0 0 25px rgba(13, 202, 240, 0.6);
+            cursor: pointer;
+        }
+
+    .slider-ticks {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+        padding: 0 4px;
+        font-size: 0.82rem;
+        color: #8a94b0;
+        user-select: none;
+    }
+</style>
+
 @code {
+    // Константы для категорий (избегаем проблем с кавычками в Razor)
+    private const string CategoryPopular = "popular";
+    private const string CategoryLossless = "lossless";
+    private const string CategoryVideo = "video";
+    private const string CategoryVoice = "voice";
+    private const string CategorySpecial = "special";
+
     private string FileName = "";
     private TimeSpan Duration;
     private int Bitrate;
@@ -230,17 +1258,27 @@
     private int Progress = 0;
     private string ConversionStatus = "Готов к работе";
     private string? InputFilePath;
-    private string? ConvertedFilePath;
     private CancellationTokenSource? Cts;
-    private string[] Formats = { "mp3", "wav", "ogg", "flac", "aac", "wma", "m4a", "opus" };
+
+    private string[] Formats = {
+    "mp3", "aac", "ogg", "opus", "wma", "m4a",
+    "flac", "wav", "alac", "aiff", "ape", "wv", "tta",
+    "ac3", "caf", "amr", "spx", "mp2"
+};
+
     private long OriginalSize;
-    private long ConvertedSize;
+    private bool _showFileDetailsModal = false;
+    private string _activeCategory = CategoryPopular;
+    private string _outputFilePath = "";
+    private long _outputFileSize = 0;
 
-    private bool ShowBitrateOptions => OutputFormat is "mp3" or "aac" or "ogg" or "opus" or "wma";
-    private bool ShowSampleRateOptions => OutputFormat is "wav" or "flac";
+    private bool ShowBitrateOptions => OutputFormat is "mp3" or "aac" or "ogg" or "opus" or "wma" or "ac3" or "amr" or "spx" or "mp2";
+    private bool ShowSampleRateOptions => OutputFormat is "wav" or "flac" or "alac" or "aiff" or "ape" or "wv" or "tta" or "caf";
 
-    // Разрешённые расширения (аудио + видео для извлечения дорожки)
-    private readonly string[] AllowedAudioExtensions = { "mp3", "wav", "flac", "ogg", "aac", "wma", "m4a", "opus", "ac3", "aiff" };
+    private readonly string[] AllowedAudioExtensions = {
+    "mp3", "wav", "flac", "ogg", "aac", "wma", "m4a", "opus",
+    "ac3", "aiff", "alac", "ape", "amr", "caf", "mp2", "spx", "tta", "wv"
+};
     private readonly string[] AllowedVideoExtensions = { "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpeg", "mpg", "3gp" };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -249,40 +1287,135 @@
         {
             try
             {
-                // Подписываемся на горячие клавиши
                 Hotkeys.OnCancelRequested += HandleCancel;
-
-                // Инициализируем с защитой от ошибок
                 await Hotkeys.InitializeAsync();
             }
             catch (Exception ex)
             {
-                // Если горячие клавиши не работают — это не критично
-                // Логируем и продолжаем работу
-                try
-                {
-                    Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}");
-                }
-                catch { }
+                try { Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}"); } catch { }
             }
         }
     }
 
-    private async Task HandleOpen()
+    private Task HandleCancel()
     {
-        await SelectFile(); // или TriggerFileInput()
+        if (IsConverting) CancelConversion();
+        return Task.CompletedTask;
     }
 
-    private async Task HandleSave()
+    private void ShowFileDetails()
     {
-        await SaveFile();
+        _showFileDetailsModal = true;
+        StateHasChanged();
     }
 
-    private async Task HandleCancel()
+    private void CloseFileDetails()
     {
-        if (IsConverting) CancelConversion();  
+        _showFileDetailsModal = false;
+        StateHasChanged();
     }
 
+    private void SetCategory(string category)
+    {
+        if (_activeCategory != category)
+        {
+            _activeCategory = category;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            await ShowToast("📋 Скопировано в буфер обмена", ToastType.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Ошибка копирования: {ex.Message}");
+            await ShowToast("❌ Не удалось скопировать", ToastType.Error);
+        }
+    }
+
+    private void OpenInputFileLocation()
+    {
+        if (string.IsNullOrEmpty(InputFilePath)) return;
+        try
+        {
+            var normalizedPath = Path.GetFullPath(InputFilePath).Replace('/', '\\');
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = "/select,\"" + normalizedPath + "\"",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Ошибка открытия папки: {ex.Message}");
+            _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private void QuickFormatSelect(string format, int bitrate)
+    {
+        OutputFormat = format;
+        if (bitrate > 0 && ShowBitrateOptions)
+        {
+            OutputBitrate = bitrate;
+        }
+        StateHasChanged();
+        _ = ShowToast($"✅ Выбран формат: {format.ToUpper()}{(bitrate > 0 ? $" @ {bitrate} kbps" : "")}", ToastType.Success);
+    }
+
+    private string GetFormatBadgeColor(string format) => format.ToLower() switch
+    {
+        "mp3" or "aac" or "m4a" => "success",
+        "flac" or "alac" or "ape" or "wv" or "tta" => "warning text-dark",
+        "wav" or "aiff" or "caf" => "danger",
+        "ogg" or "opus" or "spx" => "info",
+        "ac3" => "danger",
+        "amr" => "secondary",
+        "wma" => "primary",
+        "mp2" => "dark",
+        _ => "secondary"
+    };
+
+    private string GetFormatFullName(string format) => format.ToLower() switch
+    {
+        "mp3" => "MPEG Audio Layer III",
+        "mp2" => "MPEG-1 Audio Layer II",
+        "wav" => "Waveform Audio File Format",
+        "flac" => "Free Lossless Audio Codec",
+        "ogg" => "Ogg Vorbis",
+        "aac" => "Advanced Audio Coding",
+        "wma" => "Windows Media Audio",
+        "m4a" => "MPEG-4 Audio",
+        "opus" => "Opus Interactive Audio Codec",
+        "ac3" => "Audio Codec 3 (Dolby Digital)",
+        "aiff" => "Audio Interchange File Format",
+        "alac" => "Apple Lossless Audio Codec",
+        "ape" => "Monkey's Audio",
+        "amr" => "Adaptive Multi-Rate",
+        "caf" => "Core Audio Format",
+        "spx" => "Speex Speech Codec",
+        "tta" => "True Audio Lossless",
+        "wv" => "WavPack Hybrid Lossless",
+        _ => "Unknown Format"
+    };
+
+    private string GetBitrateQuality(int bitrate)
+    {
+        if (bitrate >= 320) return "🌟 Максимальное качество";
+        if (bitrate >= 256) return "⭐ Отличное качество";
+        if (bitrate >= 192) return "✅ Высокое качество";
+        if (bitrate >= 128) return "👍 Среднее качество";
+        if (bitrate >= 96) return "📱 Для мобильных";
+        return "📉 Низкое качество";
+    }
 
     private async Task SelectFile()
     {
@@ -301,25 +1434,21 @@
             FileName = Path.GetFileName(InputFilePath);
             InputFormat = Path.GetExtension(InputFilePath).TrimStart('.').ToLower();
 
-            // ПРОВЕРКА 1: Расширение
             bool isAudio = AllowedAudioExtensions.Contains(InputFormat);
             bool isVideo = AllowedVideoExtensions.Contains(InputFormat);
 
             if (!isAudio && !isVideo)
             {
-                Logger.LogWarning($"Аудио конвертер: отклонён файл с недопустимым расширением .{InputFormat} - {FileName}");
-                await ShowToast($"❌ Формат .{InputFormat.ToUpper()} не поддерживается!\n\nВыберите аудио или видео файл.", ToastType.Error);
+                await ShowToast($"❌ Формат .{InputFormat.ToUpper()} не поддерживается!", ToastType.Error);
                 InputFilePath = null;
                 FileName = "";
                 return;
             }
 
-            // ПРОВЕРКА 2: Размер файла
             var fileInfo = new FileInfo(InputFilePath);
             if (fileInfo.Length == 0)
             {
-                Logger.LogWarning($"Аудио конвертер: отклонён пустой файл - {FileName}");
-                await ShowToast($"❌ Файл пустой (0 байт)!", ToastType.Error);
+                await ShowToast("❌ Файл пустой (0 байт)!", ToastType.Error);
                 InputFilePath = null;
                 FileName = "";
                 return;
@@ -327,18 +1456,15 @@
 
             if (fileInfo.Length > 2L * 1024 * 1024 * 1024)
             {
-                Logger.LogWarning($"Аудио конвертер: отклонён слишком большой файл - {FileName} ({fileInfo.Length} байт)");
-                await ShowToast($"❌ Файл слишком большой (максимум 2 ГБ)!", ToastType.Error);
+                await ShowToast("❌ Файл слишком большой (максимум 2 ГБ)!", ToastType.Error);
                 InputFilePath = null;
                 FileName = "";
                 return;
             }
 
-            // ПРОВЕРКА 3: Magic numbers (только для аудио)
             if (isAudio && !ValidateAudioContent(InputFilePath, InputFormat))
             {
-                Logger.LogWarning($"Аудио конвертер: отклонён файл с неверным содержимым - {FileName}");
-                await ShowToast($"❌ Содержимое файла не соответствует формату {InputFormat.ToUpper()}!\n\nВозможно, файл переименован или повреждён.", ToastType.Error);
+                await ShowToast($"❌ Содержимое не соответствует формату {InputFormat.ToUpper()}!", ToastType.Error);
                 InputFilePath = null;
                 FileName = "";
                 return;
@@ -348,12 +1474,7 @@
 
             if (isVideo)
             {
-                Logger.LogInfo($"Аудио конвертер: загружено видео для извлечения аудио - {FileName}");
                 await ShowToast($"ℹ️ Видео файл ({InputFormat.ToUpper()})\n\nБудет извлечена аудиодорожка.", ToastType.Info);
-            }
-            else
-            {
-                Logger.LogInfo($"Аудио конвертер: загружен аудио файл - {FileName} ({OriginalSize} байт)");
             }
 
             var ffmpegPath = FFmpegService.GetFFmpegPath();
@@ -362,16 +1483,14 @@
             Bitrate = info.Bitrate;
 
             StateHasChanged();
-            await ScrollToElement("fileInfoSection");
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Аудио конвертер: ошибка выбора файла", ex);
+            Logger.LogError("Ошибка выбора файла", ex);
             await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
         }
     }
 
-    // Проверка magic numbers для аудио
     private bool ValidateAudioContent(string filePath, string extension)
     {
         try
@@ -385,24 +1504,18 @@
 
             return extension.ToLower() switch
             {
-                ".mp3" => (buffer[0] == 0xFF && (buffer[1] & 0xE0) == 0xE0) ||
-                          (buffer[0] == 0x49 && buffer[1] == 0x44 && buffer[2] == 0x33),
-                ".wav" => buffer[0] == 0x52 && buffer[1] == 0x49 && buffer[2] == 0x46 && buffer[3] == 0x46,
-                ".flac" => buffer[0] == 0x66 && buffer[1] == 0x4C && buffer[2] == 0x61 && buffer[3] == 0x43,
-                ".ogg" => buffer[0] == 0x4F && buffer[1] == 0x67 && buffer[2] == 0x67 && buffer[3] == 0x53,
-                ".aac" => true,
-                ".m4a" => buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 && buffer[7] == 0x70,
-                ".wma" => true,
-                ".opus" => true,
-                ".ac3" => true,
-                ".aiff" => buffer[0] == 0x46 && buffer[1] == 0x4F && buffer[2] == 0x52 && buffer[3] == 0x4D,
+                "mp3" => (buffer[0] == 0xFF && (buffer[1] & 0xE0) == 0xE0) || (buffer[0] == 0x49 && buffer[1] == 0x44 && buffer[2] == 0x33),
+                "wav" => buffer[0] == 0x52 && buffer[1] == 0x49 && buffer[2] == 0x46 && buffer[3] == 0x46,
+                "flac" => buffer[0] == 0x66 && buffer[1] == 0x4C && buffer[2] == 0x61 && buffer[3] == 0x43,
+                "ogg" => buffer[0] == 0x4F && buffer[1] == 0x67 && buffer[2] == 0x67 && buffer[3] == 0x53,
+                "m4a" => buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 && buffer[7] == 0x70,
+                "aiff" => buffer[0] == 0x46 && buffer[1] == 0x4F && buffer[2] == 0x52 && buffer[3] == 0x4D,
                 _ => true
             };
         }
-        catch (Exception ex)
+        catch
         {
-            Logger.LogError($"Ошибка проверки magic numbers: {filePath}", ex);
-            return true; // При ошибке - разрешаем
+            return true;
         }
     }
 
@@ -417,11 +1530,13 @@
         IsConverting = true;
         IsConverted = false;
         Progress = 0;
+        _outputFilePath = "";
+        _outputFileSize = 0;
         ConversionStatus = "Инициализация...";
         Cts = new CancellationTokenSource();
 
         var ffmpegPath = FFmpegService.GetFFmpegPath();
-        ConvertedFilePath = Path.Combine(Path.GetTempPath(),
+        var convertedFilePath = Path.Combine(Path.GetTempPath(),
             Path.GetFileNameWithoutExtension(FileName) + "_converted." + OutputFormat);
 
         var progressReporter = new Progress<int>(value =>
@@ -437,63 +1552,55 @@
 
             if (isVideo)
             {
-                await ExtractAudioFromVideo(ffmpegPath, InputFilePath, ConvertedFilePath,
-                    Duration, progressReporter, Cts.Token);
+                await ExtractAudioFromVideo(ffmpegPath, InputFilePath, convertedFilePath, Duration, progressReporter, Cts.Token);
             }
             else
             {
-                await AudioService.ConvertAsync(ffmpegPath, InputFilePath, ConvertedFilePath,
-                    Duration, progressReporter, Cts.Token);
+                await AudioService.ConvertAsync(ffmpegPath, InputFilePath, convertedFilePath, Duration, progressReporter, Cts.Token);
             }
 
-            if (!File.Exists(ConvertedFilePath))
-            {
+            if (!File.Exists(convertedFilePath))
                 throw new Exception("Файл не создан");
-            }
 
-            // Устанавливаем размер конвертированного файла
-            ConvertedSize = new FileInfo(ConvertedFilePath).Length;
+            var fileInfo = new FileInfo(convertedFilePath);
+            _outputFilePath = convertedFilePath;
+            _outputFileSize = fileInfo.Length;
 
             IsConverted = true;
             ConversionStatus = "Готово!";
             StateHasChanged();
 
-            Logger.LogInfo($"Аудио конвертер: конвертация завершена - {FileName} -> {Path.GetFileName(ConvertedFilePath)} ({ConvertedSize} байт)");
             await ShowToast("✅ Конвертация завершена!", ToastType.Success);
-            await ScrollToElement("resultSection");
         }
         catch (OperationCanceledException)
         {
-            Logger.LogInfo($"Аудио конвертер: конвертация отменена пользователем");
             await HandleConversionError("Конвертация отменена");
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Аудио конвертер: ошибка конвертации", ex);
+            Logger.LogError("Ошибка конвертации", ex);
             await HandleConversionError($"Ошибка: {ex.Message}");
         }
         finally
         {
-            if (!IsConverted)
-            {
-                IsConverting = false;
-            }
+            if (!IsConverted) IsConverting = false;
             StateHasChanged();
         }
     }
 
     private async Task HandleConversionError(string message)
     {
-        if (!string.IsNullOrEmpty(ConvertedFilePath) && File.Exists(ConvertedFilePath))
+        if (!string.IsNullOrEmpty(_outputFilePath) && File.Exists(_outputFilePath))
         {
-            try { File.Delete(ConvertedFilePath); } catch { }
+            try { File.Delete(_outputFilePath); } catch { }
         }
 
         IsConverting = false;
         IsConverted = false;
         Progress = 0;
         ConversionStatus = "Ошибка: " + message;
-        ConvertedFilePath = null;
+        _outputFilePath = "";
+        _outputFileSize = 0;
         await ShowToast($"❌ {message}", ToastType.Error);
     }
 
@@ -513,7 +1620,6 @@
         using var process = new System.Diagnostics.Process { StartInfo = psi, EnableRaisingEvents = true };
         process.Start();
 
-        // Читаем прогресс из StandardOutput (не StandardError!)
         _ = Task.Run(async () =>
         {
             try
@@ -522,7 +1628,6 @@
                 {
                     var line = await process.StandardOutput.ReadLineAsync();
                     if (line == null) break;
-
                     if (line.StartsWith("out_time_ms=") && long.TryParse(line.Replace("out_time_ms=", ""), out long ms))
                     {
                         if (duration.TotalMilliseconds > 0)
@@ -536,7 +1641,6 @@
             catch { }
         }, token);
 
-        // Пустой reader для stderr чтобы процесс не завис
         _ = Task.Run(async () =>
         {
             try
@@ -548,83 +1652,129 @@
         }, token);
 
         await process.WaitForExitAsync(token);
-
-        if (token.IsCancellationRequested)
-            throw new OperationCanceledException(token);
-
+        if (token.IsCancellationRequested) throw new OperationCanceledException(token);
         progress.Report(100);
     }
 
-    private string GetAudioCodecForFormat(string format)
+    private string GetAudioCodecForFormat(string format) => format switch
     {
-        return format switch
-        {
-            "mp3" => "libmp3lame",
-            "aac" => "aac",
-            "ogg" => "libvorbis",
-            "opus" => "libopus",
-            "wma" => "wmav2",
-            "m4a" => "aac",
-            _ => "libmp3lame"
-        };
-    }
+        "mp3" => "libmp3lame",
+        "mp2" => "mp2",
+        "aac" or "m4a" => "aac",
+        "ogg" => "libvorbis",
+        "opus" => "libopus",
+        "wma" => "wmav2",
+        "ac3" => "ac3",
+        "amr" => "libopencore_amrnb",
+        "spx" => "libspeex",
+        "flac" => "flac",
+        "wav" => "pcm_s16le",
+        "aiff" => "pcm_s16be",
+        "alac" => "alac",
+        "ape" => "ape",
+        "wv" => "wavpack",
+        "tta" => "tta",
+        "caf" => "pcm_s16le",
+        _ => "libmp3lame"
+    };
 
     private void CancelConversion() => Cts?.Cancel();
 
-    private async Task SaveFile()
+    private async Task DownloadFile()
     {
-        if (string.IsNullOrEmpty(ConvertedFilePath) || !File.Exists(ConvertedFilePath))
+        if (string.IsNullOrEmpty(_outputFilePath) || !File.Exists(_outputFilePath))
         {
-            await ShowToast("❌ Файл не найден", ToastType.Error);
+            await ShowToast("⚠️ Файл не найден", ToastType.Warning);
             return;
         }
 
         try
         {
-            var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для сохранения");
-            if (string.IsNullOrEmpty(folder))
-            {
-                await ShowToast("⚠️ Сохранение отменено", ToastType.Warning);
-                return;
-            }
+            var fileName = Path.GetFileName(_outputFilePath);
+            var fileBytes = await File.ReadAllBytesAsync(_outputFilePath);
 
-            var suggestedName = Path.GetFileName(ConvertedFilePath);
-            var savePath = Path.Combine(folder, suggestedName);
+            using var stream = new MemoryStream(fileBytes);
+            using var streamRef = new DotNetStreamReference(stream);
 
-            File.Copy(ConvertedFilePath, savePath, true);
-            Logger.LogInfo($"Аудио конвертер: файл сохранён - {savePath}");
-            await ShowToast($"✅ Файл сохранён:\n{savePath}", ToastType.Success);
+            await JSRuntime.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+
+            await ShowToast("✅ Файл скачивается...", ToastType.Success);
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Аудио конвертер: ошибка сохранения", ex);
-            await ShowToast($"❌ Ошибка сохранения: {ex.Message}", ToastType.Error);
+            Logger.LogError("Ошибка скачивания", ex);
+            await ShowToast($"❌ Ошибка скачивания: {ex.Message}", ToastType.Error);
         }
     }
 
-    private void OpenFolder()
+    private void OpenFileLocation()
     {
-        if (string.IsNullOrEmpty(ConvertedFilePath) || !File.Exists(ConvertedFilePath))
+        if (string.IsNullOrEmpty(_outputFilePath))
         {
-            Logger.LogWarning("Аудио конвертер: файл для открытия не найден");
+            _ = ShowToast("⚠️ Путь пустой", ToastType.Warning);
+            return;
+        }
+
+        if (!File.Exists(_outputFilePath))
+        {
+            var dir = Path.GetDirectoryName(_outputFilePath);
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = dir,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+                }
+            }
             return;
         }
 
         try
         {
+            var normalizedPath = Path.GetFullPath(_outputFilePath).Replace('/', '\\');
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "explorer.exe",
-                Arguments = $"/select,\"{ConvertedFilePath}\"",
+                Arguments = "/select,\"" + normalizedPath + "\"",
                 UseShellExecute = true
             };
             System.Diagnostics.Process.Start(psi);
-            Logger.LogInfo($"Аудио конвертер: открыта папка с файлом {ConvertedFilePath}");
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Аудио конвертер: ошибка открытия папки", ex);
+            Logger.LogError($"Ошибка открытия папки: {ex.Message}");
+            _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
         }
+    }
+
+    private void ClearResult()
+    {
+        if (!string.IsNullOrEmpty(_outputFilePath) && File.Exists(_outputFilePath))
+        {
+            try { File.Delete(_outputFilePath); } catch { }
+        }
+        _outputFilePath = "";
+        _outputFileSize = 0;
+        IsConverted = false;
+        Progress = 0;
+        ConversionStatus = "Готов к работе";
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 Б";
+        const long kb = 1024, mb = kb * 1024, gb = mb * 1024;
+        if (bytes >= gb) return $"{(bytes / (double)gb):F2} ГБ";
+        if (bytes >= mb) return $"{(bytes / (double)mb):F2} МБ";
+        if (bytes >= kb) return $"{(bytes / (double)kb):F2} КБ";
+        return $"{bytes} Б";
     }
 
     private async Task ResetConverter()
@@ -640,26 +1790,14 @@
         IsConverted = false;
         Progress = 0;
         ConversionStatus = "Готов к работе";
-        ConvertedFilePath = null;
+        _outputFilePath = "";
+        _outputFileSize = 0;
         OriginalSize = 0;
-        ConvertedSize = 0;
+        _showFileDetailsModal = false;
+        _activeCategory = CategoryPopular;
         Cts?.Dispose();
         Cts = null;
-
         await ScrollToTop();
-        StateHasChanged();
-    }
-
-    private void ApplyPreset(string presetName)
-    {
-        switch (presetName)
-        {
-            case "music": OutputFormat = "mp3"; OutputBitrate = 320; NormalizeAudio = true; break;
-            case "podcast": OutputFormat = "mp3"; OutputBitrate = 128; NormalizeAudio = true; break;
-            case "audiobook": OutputFormat = "mp3"; OutputBitrate = 64; NormalizeAudio = true; break;
-            case "lossless": OutputFormat = "flac"; NormalizeAudio = false; break;
-            case "phone": OutputFormat = "aac"; OutputBitrate = 192; NormalizeAudio = true; break;
-        }
         StateHasChanged();
     }
 
@@ -669,43 +1807,48 @@
     private string GetFormatDescription(string format) => format switch
     {
         "mp3" => "(универсальный)",
-        "wav" => "(без сжатия)",
-        "ogg" => "(открытый)",
-        "flac" => "(без потерь)",
         "aac" => "(лучше MP3)",
+        "ogg" => "(открытый)",
+        "opus" => "(современный)",
         "wma" => "(Windows)",
         "m4a" => "(Apple)",
-        "opus" => "(современный)",
+        "flac" => "(без потерь)",
+        "wav" => "(без сжатия)",
+        "alac" => "(Apple lossless)",
+        "aiff" => "(Mac/Pro)",
+        "ape" => "(Monkey's lossless)",
+        "wv" => "(WavPack)",
+        "tta" => "(True Audio)",
+        "ac3" => "(Dolby Digital)",
+        "caf" => "(Core Audio)",
+        "amr" => "(мобильная речь)",
+        "spx" => "(Speex речь)",
+        "mp2" => "(радио/MPEG-1)",
         _ => ""
     };
 
     private string GetFormatHelpText(string format) => format switch
     {
-        "mp3" => "Самый популярный формат",
-        "wav" => "Без сжатия, большой размер",
-        "ogg" => "Открытый формат",
-        "flac" => "Сжатие без потерь",
-        "aac" => "Лучше чем MP3",
-        "wma" => "Windows Media Audio",
-        "m4a" => "Apple iTunes",
-        "opus" => "Современный кодек",
+        "mp3" => "Самый популярный формат, совместим со всеми устройствами",
+        "aac" => "Лучше MP3 при том же битрейте, стандарт для Apple",
+        "ogg" => "Открытый формат Vorbis, без патентов",
+        "opus" => "Лучший для голоса и стриминга, низкая задержка",
+        "wma" => "Windows Media Audio, для старых Windows-устройств",
+        "m4a" => "Apple iTunes, контейнер для AAC/ALAC",
+        "flac" => "Lossless сжатие без потерь качества",
+        "wav" => "Несжатый PCM, стандарт студий",
+        "alac" => "Apple Lossless — FLAC для экосистемы Apple",
+        "aiff" => "Профессиональный Mac-формат для Logic Pro, Final Cut",
+        "ape" => "Monkey's Audio — сильное lossless сжатие",
+        "wv" => "WavPack — lossless + hybrid режим с коррекцией",
+        "tta" => "True Audio — быстрый lossless кодек",
+        "ac3" => "Dolby Digital для DVD/Blu-ray, поддержка 5.1",
+        "caf" => "Core Audio Format для iOS/macOS приложений",
+        "amr" => "Adaptive Multi-Rate для мобильных и диктофонов",
+        "spx" => "Speex — специализированный кодек для речи",
+        "mp2" => "MPEG-1 Audio Layer II, стандарт DAB радио",
         _ => ""
     };
-
-    private bool HasEnoughDiskSpace(string path, long requiredBytes)
-    {
-        var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!);
-        return drive.AvailableFreeSpace > requiredBytes;
-    }
-
-    private string GetConvertedSize()
-    {
-        if (ConvertedSize == 0) return "";
-        const long kb = 1024, mb = kb * 1024;
-        if (ConvertedSize >= mb) return $"{(ConvertedSize / (double)mb):F2} MB";
-        if (ConvertedSize >= kb) return $"{(ConvertedSize / (double)kb):F2} KB";
-        return $"{ConvertedSize} B";
-    }
 
     private string GetConversionStatusText()
     {

@@ -225,31 +225,77 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-semibold mb-2">Формат</label>
                                 <select class="form-select" value="@AudioOutputFormat" @onchange="OnAudioFormatChanged">
-                                    <option value="mp3">MP3 (совместимый)</option>
-                                    <option value="wav">WAV (без сжатия)</option>
-                                    <option value="flac">FLAC (без потерь)</option>
-                                    <option value="ogg">OGG Vorbis</option>
-                                    <option value="aac">AAC (лучше MP3)</option>
-                                    <option value="opus">OPUS (современный)</option>
-                                    <option value="m4a">M4A</option>
+                                    <optgroup label="🎵 Популярные">
+                                        <option value="mp3">MP3 — универсальный</option>
+                                        <option value="aac">AAC — лучше MP3</option>
+                                        <option value="ogg">OGG Vorbis — открытый</option>
+                                        <option value="opus">OPUS — современный</option>
+                                        <option value="m4a">M4A — Apple</option>
+                                        <option value="wma">WMA — Windows</option>
+                                    </optgroup>
+                                    <optgroup label="💎 Без потерь (Lossless)">
+                                        <option value="flac">FLAC — универсальный lossless</option>
+                                        <option value="wav">WAV — без сжатия</option>
+                                        <option value="alac">ALAC — Apple Lossless</option>
+                                        <option value="aiff">AIFF — Mac/Pro</option>
+                                        <option value="ape">APE — Monkey's Audio</option>
+                                        <option value="wv">WavPack — hybrid lossless</option>
+                                        <option value="tta">TTA — True Audio</option>
+                                    </optgroup>
+                                    <optgroup label="🎬 Видеомонтаж">
+                                        <option value="ac3">AC3 — Dolby Digital</option>
+                                        <option value="caf">CAF — Core Audio</option>
+                                    </optgroup>
+                                    <optgroup label="🎙️ Голос / Вещание">
+                                        <option value="amr">AMR — мобильная речь</option>
+                                        <option value="spx">Speex — VoIP</option>
+                                        <option value="mp2">MP2 — DAB радио</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
                                 @if (AudioSupportsBitrate)
                                 {
-                                    <label class="form-label fw-semibold mb-2">Битрейт: <span class="text-primary">@AudioBitrate</span> kbps</label>
-                                    <input type="range" class="form-range" min="64" max="320" step="32" value="@AudioBitrate" @oninput="OnAudioBitrateChanged" />
-                                    <div class="d-flex justify-content-between small text-muted">
-                                        <span>64</span><span>128</span><span>192</span><span>256</span><span>320</span>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <label class="form-label fw-semibold mb-2">Битрейт</label>
-                                    <div class="alert alert-info mb-0 py-2 small">
-                                        <i class="bi bi-info-circle me-1"></i>
-                                        Для формата <strong>@AudioOutputFormat.ToUpper()</strong> битрейт не применяется (формат без потерь)
-                                    </div>
+                                    @if (AudioOutputFormat == "ac3")
+                                    {
+                                        <label class="form-label fw-semibold mb-2">
+                                            Битрейт: <span class="text-primary">@AudioBitrate</span> kbps
+                                            <span class="badge bg-warning text-dark ms-2">AC3</span>
+                                        </label>
+                                        <select class="form-select" value="@AudioBitrate" @onchange="OnAudioBitrateChanged">
+                                            <option value="32">32 kbps (минимальный)</option>
+                                            <option value="40">40 kbps</option>
+                                            <option value="48">48 kbps</option>
+                                            <option value="56">56 kbps</option>
+                                            <option value="64">64 kbps</option>
+                                            <option value="80">80 kbps</option>
+                                            <option value="96">96 kbps</option>
+                                            <option value="112">112 kbps</option>
+                                            <option value="128">128 kbps (стандарт)</option>
+                                            <option value="160">160 kbps</option>
+                                            <option value="192">192 kbps</option>
+                                            <option value="224">224 kbps</option>
+                                            <option value="256">256 kbps</option>
+                                            <option value="320">320 kbps</option>
+                                            <option value="384">384 kbps</option>
+                                            <option value="448">448 kbps (DVD стандарт)</option>
+                                            <option value="512">512 kbps</option>
+                                            <option value="576">576 kbps</option>
+                                            <option value="640">640 kbps (максимальный)</option>
+                                        </select>
+                                        <div class="form-text text-warning mt-1">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            AC3 поддерживает только определенные битрейты
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <label class="form-label fw-semibold mb-2">Битрейт: <span class="text-primary">@AudioBitrate</span> kbps</label>
+                                        <input type="range" class="form-range" min="64" max="320" step="32" value="@AudioBitrate" @oninput="OnAudioBitrateChanged" />
+                                        <div class="d-flex justify-content-between small text-muted">
+                                            <span>64</span><span>128</span><span>192</span><span>256</span><span>320</span>
+                                        </div>
+                                    }
                                 }
                             </div>
                         </div>
@@ -268,14 +314,38 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-semibold mb-2">Формат</label>
                                 <select class="form-select" value="@ImageOutputFormat" @onchange="OnImageFormatChanged">
-                                    <option value="png">PNG</option>
-                                    <option value="jpg">JPG</option>
-                                    <option value="webp">WebP</option>
-                                    <option value="avif">AVIF</option>
-                                    <option value="bmp">BMP</option>
-                                    <option value="ico">ICO</option>
-                                    <option value="gif">GIF</option>
-                                    <option value="tiff">TIFF</option>
+                                    <optgroup label="🌐 Популярные">
+                                        <option value="jpg">JPG — универсальный</option>
+                                        <option value="png">PNG — без потерь, прозрачность</option>
+                                        <option value="webp">WebP — Google, для веба</option>
+                                        <option value="avif">AVIF — лучшее сжатие</option>
+                                        <option value="gif">GIF — анимации, 256 цветов</option>
+                                        <option value="heic">HEIC — Apple iPhone</option>
+                                    </optgroup>
+                                    <optgroup label="🎨 Дизайн / Печать">
+                                        <option value="tiff">TIFF — полиграфия, CMYK</option>
+                                        <option value="bmp">BMP — без сжатия, Windows</option>
+                                        <option value="pnm">PNM — Unix, простой</option>
+                                        <option value="psd">PSD — Photoshop</option>
+                                    </optgroup>
+                                    <optgroup label="🎮 Для игр">
+                                        <option value="tga">TGA — Targa, ретро-игры</option>
+                                        <option value="dds">DDS — DirectX текстуры</option>
+                                        <option value="pcx">PCX — DOS-игры</option>
+                                        <option value="sgi">SGI — Silicon Graphics</option>
+                                    </optgroup>
+                                    <optgroup label="🎬 Видео / VFX">
+                                        <option value="dpx">DPX — киносканеры</option>
+                                        <option value="exr">OpenEXR — VFX, HDR</option>
+                                        <option value="hdr">HDR — Radiance, HDRI</option>
+                                        <option value="cin">CINEON — Kodak</option>
+                                    </optgroup>
+                                    <optgroup label="🔧 Спецформаты">
+                                        <option value="ico">ICO — иконки Windows</option>
+                                        <option value="jxl">JPEG XL — преемник JPEG</option>
+                                        <option value="qoi">QOI — быстрый lossless</option>
+                                        <option value="ff">Farbfeld — простой lossless</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -345,20 +415,50 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-semibold mb-2">Формат</label>
                                 <select class="form-select" value="@VideoOutputFormat" @onchange="OnVideoFormatChanged">
-                                    <option value="mp4">MP4 (совместимый)</option>
-                                    <option value="mkv">MKV (универсальный)</option>
-                                    <option value="avi">AVI</option>
-                                    <option value="mov">MOV</option>
-                                    <option value="webm">WebM</option>
+                                    <optgroup label="🌐 Популярные">
+                                        <option value="mp4">MP4 — универсальный, H.264/H.265</option>
+                                        <option value="mkv">MKV — все кодеки, субтитры</option>
+                                        <option value="avi">AVI — старая совместимость</option>
+                                        <option value="mov">MOV — Apple QuickTime</option>
+                                        <option value="wmv">WMV — Windows Media</option>
+                                        <option value="flv">FLV — Flash Video</option>
+                                        <option value="webm">WebM — веб, VP9/AV1</option>
+                                    </optgroup>
+                                    <optgroup label="📱 Мобильные / Apple">
+                                        <option value="m4v">M4V — Apple iTunes/Video</option>
+                                        <option value="3gp">3GP — мобильные устройства</option>
+                                    </optgroup>
+                                    <optgroup label="💿 DVD / Старые">
+                                        <option value="mpeg">MPEG — MPEG-1/2, DVD</option>
+                                        <option value="mpg">MPG — MPEG-1/2, DVD</option>
+                                        <option value="vob">VOB — DVD Video Object</option>
+                                    </optgroup>
+                                    <optgroup label="📡 Streaming / TV">
+                                        <option value="ts">TS — транспортный поток, TV</option>
+                                        <option value="m2ts">M2TS — Blu-ray, AVCHD</option>
+                                    </optgroup>
+                                    <optgroup label="🔧 Другие">
+                                        <option value="ogv">OGV — Ogg Theora, открытый</option>
+                                        <option value="gif">GIF — анимация, 256 цветов</option>
+                                        <option value="asf">ASF — Advanced Systems Format</option>
+                                        <option value="rm">RM — RealMedia</option>
+                                        <option value="divx">DivX — DivX видео</option>
+                                        <option value="f4v">F4V — Flash Video (новый)</option>
+                                    </optgroup>
                                 </select>
+                                @if (!IsVideoFormatVerified(VideoOutputFormat))
+                                {
+                                    <div class="alert alert-warning mt-2 mb-0 py-2 small">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        @GetFormatWarning(VideoOutputFormat)
+                                    </div>
+                                }
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-semibold mb-2">Видео кодек</label>
                                 <select class="form-select" value="@VideoCodec" @onchange="OnVideoCodecChanged">
-                                    <option value="libx264">H.264 (libx264)</option>
-                                    <option value="libx265">H.265/HEVC (libx265)</option>
-                                    <option value="mpeg4">MPEG-4</option>
-                                    <option value="vp9">VP9</option>
+                                    <option value="libx264">H.264 (libx264) — универсальный</option>
+                                    <option value="mpeg4">MPEG-4 — старая совместимость</option>
                                 </select>
                             </div>
                         </div>
@@ -956,9 +1056,38 @@
     private int ImageHeight = 1080;
     private bool KeepAspectRatio = true;
     private bool OptimizeImages = false;
-    private bool AudioSupportsBitrate => AudioOutputFormat is not ("wav" or "flac");
-    private bool ImageSupportsQuality => ImageOutputFormat is "jpg" or "jpeg" or "webp" or "avif" or "heic";
+    private bool AudioSupportsBitrate => AudioOutputFormat is
+     "mp3" or "aac" or "ogg" or "opus" or "wma" or "m4a" or "ac3" or "amr" or "spx" or "mp2";
+    private bool ImageSupportsQuality => ImageOutputFormat is
+        "jpg" or "jpeg" or "webp" or "avif" or "heic" or "heif" or "jxl";
     private bool VideoSupportsCrf => VideoCodec is not "mpeg4";
+    // Проверенные форматы, которые точно работают в FFmpeg
+    private readonly HashSet<string> VerifiedVideoFormats = new()
+    {
+        "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm",
+        "m4v", "3gp", "mpeg", "mpg", "vob"
+    };
+
+    // Форматы, которые могут не работать в некоторых сборках FFmpeg
+    private readonly HashSet<string> UnverifiedVideoFormats = new()
+    {
+        "ts", "m2ts", "ogv", "asf", "rm", "divx", "f4v"
+    };
+
+    private bool IsVideoFormatVerified(string format)
+    {
+        return VerifiedVideoFormats.Contains(format.ToLower());
+    }
+
+    private string GetFormatWarning(string format)
+    {
+        if (UnverifiedVideoFormats.Contains(format.ToLower()))
+        {
+            return $"⚠️ Формат {format.ToUpper()} может не поддерживаться вашей сборкой FFmpeg. Рекомендуется использовать MP4, MKV или AVI.";
+        }
+        return "";
+    }
+
 
     // ===== Video settings =====
     private string VideoOutputFormat = "mp4";
@@ -1196,13 +1325,7 @@
         {
             return string.Join(",", AllowedExtensions.Values.SelectMany(x => x));
         }
-        return BatchType switch
-        {
-            "audio" => ".mp3,.wav,.flac,.ogg,.aac,.m4a,.wma,.opus,.ac3,.aiff",
-            "image" => ".jpg,.jpeg,.png,.gif,.bmp,.webp,.avif,.tiff,.ico,.heic,.raw",
-            "video" => ".mp4,.avi,.mkv,.mov,.wmv,.flv,.webm,.m4v,.mpeg,.mpg",
-            _ => "*"
-        };
+        return string.Join(",", AllowedExtensions[BatchType]);
     }
 
     private string GetFileType(string extension)
@@ -1243,11 +1366,38 @@
     }
 
     private readonly Dictionary<string, string[]> AllowedExtensions = new()
-{
-    { "audio", new[] { ".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".opus", ".ac3", ".aiff" } },
-    { "image", new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".avif", ".tiff", ".ico" } },
-    { "video", new[] { ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".mpg", ".3gp" } }
-};
+    {
+        { "audio", new[] {
+        // Популярные
+        ".mp3", ".aac", ".ogg", ".opus", ".wma", ".m4a",
+        // Lossless
+        ".flac", ".wav", ".alac", ".aiff", ".ape", ".wv", ".tta",
+        // Видеомонтаж
+        ".ac3", ".caf",
+        // Вещание
+        ".mp2"
+        // Убраны: .amr, .spx (требуют специальных сборок)
+        } },
+        { "image", new[] {
+            // Популярные
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".heic", ".heif",
+            // Дизайн/печать
+            ".bmp", ".tiff", ".tif", ".pnm", ".pbm", ".pgm", ".ppm", ".psd",
+            // Игры
+            ".tga", ".dds", ".pcx", ".sgi", ".rgb",
+            // VFX/видео
+            ".dpx", ".exr", ".hdr", ".cin",
+            // Спецформаты
+            ".ico", ".jxl", ".qoi", ".ff"
+        } },
+        { "video", new[] {
+        // Проверенные форматы, которые работают во всех сборках FFmpeg
+        ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm",
+        ".m4v", ".3gp",
+        ".mpeg", ".mpg", ".vob"
+        // Убраны: .ts, .m2ts, .ogv, .asf, .rm, .divx, .f4v
+        } }
+    };
 
     private async Task OnMultipleFilesSelected(InputFileChangeEventArgs e)
     {
@@ -1427,95 +1577,87 @@
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length < 4) return false;
 
-            var buffer = new byte[12];
+            var buffer = new byte[16];
             using var fs = File.OpenRead(filePath);
-            fs.Read(buffer, 0, Math.Min(12, (int)fileInfo.Length));
+            fs.Read(buffer, 0, Math.Min(16, (int)fileInfo.Length));
 
-            // Проверяем по расширениям
             var isValid = extension.ToLower() switch
             {
                 // ===== АУДИО =====
-                ".mp3" => (buffer[0] == 0xFF && (buffer[1] & 0xE0) == 0xE0) || // Sync bytes
-                          (buffer[0] == 0x49 && buffer[1] == 0x44 && buffer[2] == 0x33), // ID3 тег
-
+                ".mp3" => (buffer[0] == 0xFF && (buffer[1] & 0xE0) == 0xE0) ||
+                          (buffer[0] == 0x49 && buffer[1] == 0x44 && buffer[2] == 0x33),
                 ".wav" => buffer[0] == 0x52 && buffer[1] == 0x49 &&
-                          buffer[2] == 0x46 && buffer[3] == 0x46, // RIFF
-
+                          buffer[2] == 0x46 && buffer[3] == 0x46,
                 ".flac" => buffer[0] == 0x66 && buffer[1] == 0x4C &&
-                           buffer[2] == 0x61 && buffer[3] == 0x43, // fLaC
-
+                           buffer[2] == 0x61 && buffer[3] == 0x43,
                 ".ogg" => buffer[0] == 0x4F && buffer[1] == 0x67 &&
-                          buffer[2] == 0x67 && buffer[3] == 0x53, // OggS
-
-                ".aac" => true, // Сложно определить - пропускаем
-
-                ".m4a" => CheckFtypBox(buffer), // ftyp box (может быть на разных позициях)
-
-                ".wma" => true, // Сложно определить - пропускаем
-
-                ".opus" => true, // Сложно определить - пропускаем
-
-                ".ac3" => true, // Сложно определить - пропускаем
-
+                          buffer[2] == 0x67 && buffer[3] == 0x53,
+                ".aac" or ".wma" or ".opus" or ".ac3" or ".amr" or ".spx" or ".mp2" => true,
+                ".m4a" or ".alac" => CheckFtypBox(buffer),
                 ".aiff" => buffer[0] == 0x46 && buffer[1] == 0x4F &&
-                           buffer[2] == 0x52 && buffer[3] == 0x4D, // FORM
+                           buffer[2] == 0x52 && buffer[3] == 0x4D,
+                ".ape" => buffer[0] == 0x4D && buffer[1] == 0x41 &&
+                          buffer[2] == 0x43 && buffer[3] == 0x20,
+                ".wv" => buffer[0] == 0x77 && buffer[1] == 0x76 &&
+                         buffer[2] == 0x70 && buffer[3] == 0x6B,
+                ".tta" => buffer[0] == 0x54 && buffer[1] == 0x54 &&
+                          buffer[2] == 0x41 && buffer[3] == 0x31,
+                ".caf" => buffer[0] == 0x63 && buffer[1] == 0x61 &&
+                          buffer[2] == 0x66 && buffer[3] == 0x66,
 
                 // ===== ИЗОБРАЖЕНИЯ =====
                 ".jpg" or ".jpeg" => buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF,
-
                 ".png" => buffer[0] == 0x89 && buffer[1] == 0x50 &&
                           buffer[2] == 0x4E && buffer[3] == 0x47,
-
                 ".gif" => buffer[0] == 0x47 && buffer[1] == 0x49 && buffer[2] == 0x46,
-
                 ".bmp" => buffer[0] == 0x42 && buffer[1] == 0x4D,
-
-                ".webp" => buffer[0] == 0x52 && buffer[1] == 0x49 &&
+                ".webp" => buffer.Length >= 12 && buffer[0] == 0x52 && buffer[1] == 0x49 &&
                            buffer[2] == 0x46 && buffer[3] == 0x46 &&
                            buffer[8] == 0x57 && buffer[9] == 0x45 &&
                            buffer[10] == 0x42 && buffer[11] == 0x50,
-
-                ".avif" => CheckFtypBox(buffer),
-
-                ".tiff" => (buffer[0] == 0x49 && buffer[1] == 0x49) ||
-                           (buffer[0] == 0x4D && buffer[1] == 0x4D),
-
+                ".avif" or ".heic" or ".heif" => CheckFtypBox(buffer),
+                ".tiff" or ".tif" => (buffer[0] == 0x49 && buffer[1] == 0x49) ||
+                                     (buffer[0] == 0x4D && buffer[1] == 0x4D),
                 ".ico" => buffer[0] == 0x00 && buffer[1] == 0x00 &&
                           buffer[2] == 0x01 && buffer[3] == 0x00,
-
-                ".heic" => true, // Сложно определить - пропускаем
+                ".tga" => true,
+                ".dds" => buffer[0] == 0x44 && buffer[1] == 0x44 &&
+                          buffer[2] == 0x53 && buffer[3] == 0x20,
+                ".pcx" => buffer[0] == 0x0A,
+                ".exr" => buffer[0] == 0x76 && buffer[1] == 0x2F &&
+                          buffer[2] == 0x31 && buffer[3] == 0x01,
+                ".hdr" => buffer[0] == 0x23 && buffer[1] == 0x3F,
+                ".dpx" => buffer[0] == 0x53 && buffer[1] == 0x44 &&
+                          buffer[2] == 0x50 && buffer[3] == 0x58,
+                ".jxl" => buffer[0] == 0xFF && buffer[1] == 0x0A,
+                ".qoi" => buffer[0] == 0x71 && buffer[1] == 0x6F &&
+                          buffer[2] == 0x69 && buffer[3] == 0x66,
+                ".ff" => buffer[0] == 0x66 && buffer[1] == 0x61 &&
+                         buffer[2] == 0x72 && buffer[3] == 0x62,
+                ".psd" => buffer[0] == 0x38 && buffer[1] == 0x42 &&
+                          buffer[2] == 0x50 && buffer[3] == 0x53,
+                ".pnm" or ".pbm" or ".pgm" or ".ppm" =>
+                    buffer[0] == 0x50 && buffer[1] >= 0x31 && buffer[1] <= 0x36,
+                ".sgi" or ".rgb" => buffer[0] == 0x01 && buffer[1] == 0xDA,
+                ".cin" => buffer[0] == 0x80 && buffer[1] == 0x2A &&
+                          buffer[2] == 0x5F && buffer[3] == 0xD7,
 
                 // ===== ВИДЕО =====
-                ".mp4" => CheckFtypBox(buffer),
-
+                ".mp4" or ".mov" or ".m4v" or ".3gp" => CheckFtypBox(buffer),
                 ".avi" => buffer[0] == 0x52 && buffer[1] == 0x49 &&
                           buffer[2] == 0x46 && buffer[3] == 0x46,
-
-                ".mkv" => buffer[0] == 0x1A && buffer[1] == 0x45 &&
-                          buffer[2] == 0xDF && buffer[3] == 0xA3,
-
-                ".mov" => CheckFtypBox(buffer),
-
+                ".mkv" or ".webm" => buffer[0] == 0x1A && buffer[1] == 0x45 &&
+                                     buffer[2] == 0xDF && buffer[3] == 0xA3,
                 ".wmv" => buffer[0] == 0x30 && buffer[1] == 0x26 &&
                           buffer[2] == 0xB2 && buffer[3] == 0x75,
-
                 ".flv" => buffer[0] == 0x46 && buffer[1] == 0x4C && buffer[2] == 0x56,
+                ".mpeg" or ".mpg" or ".vob" => buffer[0] == 0x00 && buffer[1] == 0x00 &&
+                                              buffer[2] == 0x01 && (buffer[3] == 0xBA || buffer[3] == 0xB3),
 
-                ".webm" => buffer[0] == 0x1A && buffer[1] == 0x45 &&
-                           buffer[2] == 0xDF && buffer[3] == 0xA3,
-
-                ".m4v" => CheckFtypBox(buffer),
-
-                ".mpeg" or ".mpg" => buffer[0] == 0x00 && buffer[1] == 0x00 &&
-                                     buffer[2] == 0x01 && (buffer[3] == 0xBA || buffer[3] == 0xB3),
-
-                ".3gp" => true, // Сложно определить - пропускаем
-
-                // ===== ЗАПРЕЩЁННЫЕ ФОРМАТЫ =====
+                // ===== ЗАПРЕЩЁННЫЕ =====
                 ".exe" or ".dll" or ".bat" or ".cmd" or ".scr" or
                 ".com" or ".pif" or ".vbs" or ".js" or ".msi" => false,
 
-                // ===== НЕИЗВЕСТНЫЕ - РАЗРЕШАЕМ =====
                 _ => true
             };
 
@@ -1529,7 +1671,6 @@
         catch (Exception ex)
         {
             Logger.LogError($"Ошибка проверки magic numbers: {filePath}", ex);
-            // При ошибке проверки - разрешаем файл (лучше конвертировать, чем отклонить)
             return true;
         }
     }
@@ -1649,9 +1790,9 @@
 
             var extensions = BatchType switch
             {
-                "audio" => new[] { ".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".opus", ".ac3", ".aiff" },
-                "image" => new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".avif", ".tiff", ".ico", ".heic", ".raw" },
-                "video" => new[] { ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpeg", ".mpg" },
+                "audio" => AllowedExtensions["audio"],
+                "image" => AllowedExtensions["image"],
+                "video" => AllowedExtensions["video"],
                 "mixed" => AllowedExtensions.Values.SelectMany(x => x).ToArray(),
                 _ => Array.Empty<string>()
             };
@@ -1911,6 +2052,34 @@
     // ===== Конвертация =====
     private async Task StartBatchConversion()
     {
+
+        // 🛡️ ВАЛИДАЦИЯ БИТРЕЙТА ДЛЯ AC3
+        if (AudioOutputFormat == "ac3")
+        {
+            int[] validAc3Bitrates = { 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640 };
+            if (!validAc3Bitrates.Contains(AudioBitrate))
+            {
+                await JSRuntime.InvokeVoidAsync("showToast", 
+                    $"⚠️ AC3 не поддерживает битрейт {AudioBitrate} kbps. Используется ближайший допустимый.", "warning");
+                AudioBitrate = validAc3Bitrates.OrderBy(b => Math.Abs(b - AudioBitrate)).First();
+            }
+            if ((BatchType == "mixed" || BatchType == "video") &&
+    SelectedFiles.Any(f => GetFileType(Path.GetExtension(f).ToLower()) == "video") &&
+    !IsVideoFormatVerified(VideoOutputFormat))
+            {
+                var confirm = await JSRuntime.InvokeAsync<bool>("confirm",
+                    $"⚠️ Формат {VideoOutputFormat.ToUpper()} может не поддерживаться вашей сборкой FFmpeg.\n\n" +
+                    $"Рекомендуется использовать: MP4, MKV или AVI.\n\n" +
+                    $"Продолжить?");
+
+                if (!confirm)
+                {
+                    await ShowNotification("Конвертация отменена", NotificationType.Warning);
+                    return;
+                }
+            }
+        }
+
         var invalidFiles = new List<string>();
         foreach (var file in SelectedFiles)
         {
@@ -2145,6 +2314,15 @@
 
     private async Task ConvertAudioFile(string ffmpegPath, string inputFile, string outputFile)
     {
+        var audioCodec = GetAudioCodecForFormat(AudioOutputFormat);
+        var bitrate = AudioBitrate;
+
+        if (AudioOutputFormat == "ac3")
+        {
+            bitrate = GetValidAc3Bitrate(bitrate);
+            if (bitrate > 640) bitrate = 640;
+        }
+
         await AudioService.ConvertAsync(ffmpegPath, inputFile, outputFile, TimeSpan.Zero,
             new Progress<int>(p =>
             {
@@ -2263,14 +2441,31 @@
 
             var format = options.OutputFormat.ToLower() switch
             {
+                // Популярные
                 "png" => ImageMagick.MagickFormat.Png,
                 "jpg" or "jpeg" => ImageMagick.MagickFormat.Jpeg,
                 "webp" => ImageMagick.MagickFormat.WebP,
                 "avif" => ImageMagick.MagickFormat.Avif,
+                "gif" => ImageMagick.MagickFormat.Gif,
+                "heic" or "heif" => ImageMagick.MagickFormat.Heic,
                 "bmp" => ImageMagick.MagickFormat.Bmp,
                 "tiff" or "tif" => ImageMagick.MagickFormat.Tiff,
-                "gif" => ImageMagick.MagickFormat.Gif,
-                "ico" => ImageMagick.MagickFormat.Icon,
+                "pnm" or "ppm" => ImageMagick.MagickFormat.Ppm,
+                "pbm" => ImageMagick.MagickFormat.Pbm,
+                "pgm" => ImageMagick.MagickFormat.Pgm,
+                "psd" => ImageMagick.MagickFormat.Psd,
+                "tga" => ImageMagick.MagickFormat.Tga,
+                "dds" => ImageMagick.MagickFormat.Dds,
+                "pcx" => ImageMagick.MagickFormat.Pcx,
+                "sgi" or "rgb" => ImageMagick.MagickFormat.Sgi,
+                "dpx" => ImageMagick.MagickFormat.Dpx,
+                "exr" => ImageMagick.MagickFormat.Exr,
+                "hdr" => ImageMagick.MagickFormat.Hdr,
+                "cin" => ImageMagick.MagickFormat.Cin,
+                "ico" => ImageMagick.MagickFormat.Ico,
+                "jxl" => ImageMagick.MagickFormat.Jxl,
+                "qoi" => ImageMagick.MagickFormat.Qoi,
+                "ff" => ImageMagick.MagickFormat.Farbfeld,
                 _ => ImageMagick.MagickFormat.Png
             };
 
@@ -2320,6 +2515,33 @@
         if (!(Cts?.IsCancellationRequested ?? false))
             CleanupTempFile(inputFile);
     }
+
+    private int GetValidAc3Bitrate(int requestedBitrate)
+    {
+        int[] validBitrates = { 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640 };
+        return validBitrates.OrderBy(b => Math.Abs(b - requestedBitrate)).First();
+    }
+
+    private string GetAudioCodecForFormat(string format) => format.ToLower() switch
+    {
+        "mp3" => "libmp3lame",
+        "mp2" => "mp2",
+        "aac" or "m4a" => "aac",
+        "ogg" => "libvorbis",
+        "opus" => "libopus",
+        "wma" => "wmav2",
+        "ac3" => "ac3",
+        "flac" => "flac",
+        "wav" => "pcm_s16le",
+        "aiff" => "pcm_s16be",
+        "alac" => "alac",
+        "ape" => "ape",
+        "wv" => "wavpack",
+        "tta" => "tta",
+        "caf" => "pcm_s16le",
+        _ => "libmp3lame"
+    };
+
 
     private void CleanupTempFile(string filePath)
     {
@@ -2435,13 +2657,17 @@
     private string GetFileIcon(string filePath)
     {
         var ext = Path.GetExtension(filePath).ToLower();
-        return ext switch
-        {
-            ".mp3" or ".wav" or ".flac" or ".ogg" or ".aac" or ".opus" or ".m4a" or ".wma" or ".ac3" or ".aiff" => "bi-music-note-beamed",
-            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" or ".avif" or ".tiff" or ".ico" or ".heic" or ".raw" => "bi-image",
-            ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" or ".flv" or ".webm" or ".m4v" or ".mpeg" or ".mpg" => "bi-camera-video",
-            _ => "bi-file-earmark"
-        };
+
+        if (AllowedExtensions["audio"].Contains(ext))
+            return "bi-music-note-beamed";
+
+        if (AllowedExtensions["image"].Contains(ext))
+            return "bi-image";
+
+        if (AllowedExtensions["video"].Contains(ext))
+            return "bi-camera-video";
+
+        return "bi-file-earmark";
     }
 
     private string GetFileExtension(string filePath) => Path.GetExtension(filePath).TrimStart('.');

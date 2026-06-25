@@ -138,6 +138,8 @@ namespace DazzConv.Services
             });
         }
 
+
+
         // НОВОЕ: Конвертация с принудительным удалением всех профилей (fallback для iCCP ошибок)
         public async Task<byte[]> ConvertAdvancedWithStripProfile(string inputPath, ImageConversionOptions options)
         {
@@ -319,16 +321,40 @@ namespace DazzConv.Services
         {
             return extension.ToLower() switch
             {
-                "png" => MagickFormat.Png,
+                // Популярные
                 "jpg" or "jpeg" => MagickFormat.Jpeg,
+                "png" => MagickFormat.Png,
                 "webp" => MagickFormat.WebP,
                 "avif" => MagickFormat.Avif,
-                "heic" => MagickFormat.Heic,
-                "bmp" => MagickFormat.Bmp,
-                "tiff" or "tif" => MagickFormat.Tiff,
                 "gif" => MagickFormat.Gif,
-                "ico" => MagickFormat.Icon,
-                _ => MagickFormat.Unknown
+                "heic" or "heif" => MagickFormat.Heic,
+
+                // Дизайн/печать
+                "tiff" or "tif" => MagickFormat.Tiff,
+                "bmp" => MagickFormat.Bmp,
+                "pnm" or "ppm" => MagickFormat.Ppm,
+                "pbm" => MagickFormat.Pbm,
+                "pgm" => MagickFormat.Pgm,
+                "psd" => MagickFormat.Psd,
+
+                // Игры
+                "tga" => MagickFormat.Tga,
+                "dds" => MagickFormat.Dds,
+                "pcx" => MagickFormat.Pcx,
+                "sgi" or "rgb" => MagickFormat.Sgi,
+
+                // VFX/видео
+                "dpx" => MagickFormat.Dpx,
+                "exr" => MagickFormat.Exr,
+                "hdr" => MagickFormat.Hdr,
+                "cin" => MagickFormat.Cin,
+
+                // Спецформаты
+                "ico" => MagickFormat.Ico,
+                "jxl" => MagickFormat.Jxl,
+                "qoi" => MagickFormat.Qoi,
+                "ff" or "farbfeld" => MagickFormat.Farbfeld,
+                _ => MagickFormat.Png
             };
         }
 

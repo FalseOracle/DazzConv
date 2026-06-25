@@ -36,6 +36,14 @@ namespace DazzConv.Services
             if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
                 Directory.CreateDirectory(outputDir);
 
+            // 🎨 СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ GIF
+            if (videoCodec.ToLower() == "gif" || outputFormat.ToLower() == "gif")
+            {
+                await ConvertToGifAsync(ffmpegPath, inputFile, outputFile, fps, resolution, progress, token);
+                return;
+            }
+
+            // 🎬 ОБЫЧНАЯ КОНВЕРТАЦИЯ ВИДЕО
             var args = BuildFFmpegArguments(
                 inputFile, outputFile, outputFormat,
                 videoCodec, crf, preset, resolution, audioBitrate, hwAccel, fps);
@@ -85,7 +93,6 @@ namespace DazzConv.Services
                         var seconds = double.Parse(timeMatch.Groups[3].Value, CultureInfo.InvariantCulture);
                         var currentTime = TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
 
-                        // Защита от деления на ноль и переполнения
                         if (duration.TotalSeconds > 0)
                         {
                             var percent = (int)(currentTime.TotalSeconds / duration.TotalSeconds * 100);
@@ -112,6 +119,95 @@ namespace DazzConv.Services
             progress?.Report(100);
         }
 
+        // 🎨 СПЕЦИАЛЬНЫЙ МЕТОД ДЛЯ GIF С ПАЛИТРОЙ
+        private async Task ConvertToGifAsync(
+            string ffmpegPath,
+            string inputFile,
+            string outputFile,
+            string? fps,
+            string? resolution,
+            IProgress<int>? progress,
+            CancellationToken token)
+        {
+            var gifFps = string.IsNullOrEmpty(fps) ? "15" : fps;
+            var gifScale = string.IsNullOrEmpty(resolution) ? "640:-1" : resolution;
+
+            // Двухпроходная конвертация с палитрой для качественного GIF
+            var args = $"-y -i \"{inputFile}\" " +
+                       $"-vf \"fps={gifFps},scale={gifScale}:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=256[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle\" " +
+                       $"\"{outputFile}\"";
+
+            try
+            {
+                File.WriteAllText("last_ffmpeg_args.txt", args);
+            }
+            catch { }
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = args,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = psi };
+
+            var duration = TimeSpan.Zero;
+            var errorOutput = "";
+
+            process.ErrorDataReceived += (s, e) =>
+            {
+                if (e.Data == null) return;
+                errorOutput += e.Data + "\n";
+
+                var durationMatch = Regex.Match(e.Data, @"Duration:\s*(\d+):(\d+):(\d+\.\d+)");
+                if (durationMatch.Success && duration == TimeSpan.Zero)
+                {
+                    var hours = int.Parse(durationMatch.Groups[1].Value);
+                    var minutes = int.Parse(durationMatch.Groups[2].Value);
+                    var seconds = double.Parse(durationMatch.Groups[3].Value, CultureInfo.InvariantCulture);
+                    duration = TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
+                }
+
+                if (duration > TimeSpan.Zero)
+                {
+                    var timeMatch = Regex.Match(e.Data, @"time=(\d+):(\d+):(\d+\.\d+)");
+                    if (timeMatch.Success)
+                    {
+                        var hours = int.Parse(timeMatch.Groups[1].Value);
+                        var minutes = int.Parse(timeMatch.Groups[2].Value);
+                        var seconds = double.Parse(timeMatch.Groups[3].Value, CultureInfo.InvariantCulture);
+                        var currentTime = TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
+
+                        if (duration.TotalSeconds > 0)
+                        {
+                            var percent = (int)(currentTime.TotalSeconds / duration.TotalSeconds * 100);
+                            progress?.Report(Math.Min(100, Math.Max(0, percent)));
+                        }
+                    }
+                }
+            };
+
+            process.Start();
+            process.BeginErrorReadLine();
+
+            await Task.Run(() => process.WaitForExit(), token);
+
+            if (process.ExitCode != 0)
+            {
+                var lastError = errorOutput.Split('\n').TakeLast(5).FirstOrDefault() ?? "Неизвестная ошибка";
+                throw new Exception($"FFmpeg ошибка при создании GIF (код {process.ExitCode}):\n{lastError}");
+            }
+
+            if (!File.Exists(outputFile))
+                throw new Exception($"GIF файл не создан: {outputFile}");
+
+            progress?.Report(100);
+        }
+
         private string BuildFFmpegArguments(
             string inputFile, string outputFile, string outputFormat,
             string videoCodec, int crf, string preset, string resolution,
@@ -120,7 +216,6 @@ namespace DazzConv.Services
             var args = "-y ";
             args += $"-i \"{inputFile}\" ";
 
-            // Определяем реальный кодек (с учётом NVENC)
             string actualCodec = videoCodec.ToLower();
 
             // Видео кодек
@@ -129,10 +224,8 @@ namespace DazzConv.Services
             // Параметры качества в зависимости от кодека
             if (actualCodec.Contains("nvenc"))
             {
-                // Для NVENC - используем CQ (аналог CRF)
-                // УБРАЛИ lossless - не все GPU поддерживают
                 if (crf <= 18)
-                    args += "-rc vbr_hq -cq 18 ";  // Вместо lossless
+                    args += "-rc vbr_hq -cq 18 ";
                 else if (crf <= 23)
                     args += "-rc vbr_hq -cq 18 ";
                 else if (crf <= 28)
@@ -140,7 +233,6 @@ namespace DazzConv.Services
                 else
                     args += $"-rc vbr_hq -cq {crf} ";
 
-                // Preset для NVENC
                 args += preset switch
                 {
                     "ultrafast" => "-preset p1 ",
@@ -190,7 +282,7 @@ namespace DazzConv.Services
                 }
             }
 
-            // Аудио
+            // Аудио (всегда добавляем для обычных видео)
             args += $"-c:a aac -b:a {audioBitrate}k ";
 
             // Формат

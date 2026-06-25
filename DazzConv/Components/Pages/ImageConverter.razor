@@ -2,6 +2,7 @@
 @using ConverToDazz.Core.Services
 @using ConverToDazz.Core.Models
 @using DazzConv.Services
+@using Microsoft.AspNetCore.Components.Forms
 @inject ImageConverterService ImageService
 @inject IJSRuntime JSRuntime
 @inject LoggerService Logger
@@ -12,68 +13,50 @@
 <div class="card mb-4" id="uploadSection">
     <div class="card-body text-center">
         <button class="btn btn-primary btn-lg" @onclick="SelectFile">
-            <i class="bi bi-folder2-open"></i> Выбрать изображение
+            <i class="bi bi-image"></i> Выбрать изображение
         </button>
-        <p class="text-muted mt-2 mb-0">Поддерживаемые форматы: JPG, PNG, WebP, AVIF, BMP, TIFF, ICO</p>
+        <p class="text-muted mt-2 mb-0">
+            22 формата: JPG, PNG, WebP, AVIF, GIF, HEIC, TIFF, BMP, PNM, PSD,
+            TGA, DDS, PCX, SGI, DPX, EXR, HDR, CINEON, ICO, JXL, QOI, Farbfeld
+        </p>
     </div>
 </div>
 
 @if (!string.IsNullOrEmpty(InputFilePath))
 {
     <div class="row">
-        <!-- Превью и информация -->
-        <div class="col-md-5 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Информация о файле</h5>
+        <!-- 🆕 КОМПАКТНАЯ КАРТОЧКА ФАЙЛА -->
+        <div class="col-md-12 mb-4">
+            <div class="file-card">
+                <div class="file-card-icon image">
+                    <i class="bi bi-image-fill"></i>
                 </div>
-                <div class="card-body">
-                    @if (!string.IsNullOrEmpty(PreviewBase64))
-                    {
-                        <div class="text-center mb-3">
-                            <img src="data:image/png;base64,@PreviewBase64"
-                                 class="img-fluid rounded border"
-                                 alt="Preview"
-                                 style="max-height: 300px;" />
-                        </div>
-                    }
-
-                    <table class="table table-sm table-bordered">
-                        <tbody>
-                            <tr>
-                                <th>Файл:</th>
-                                <td class="text-break">@FileName</td>
-                            </tr>
-                            <tr>
-                                <th>Размер:</th>
-                                <td>@FileSize</td>
-                            </tr>
-                            <tr>
-                                <th>Формат:</th>
-                                <td>@InputFormat.ToUpper()</td>
-                            </tr>
-                            <tr>
-                                <th>Разрешение:</th>
-                                <td>@ImageWidth x @ImageHeight px</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="file-card-info">
+                    <div class="file-card-name" title="@FileName">@FileName</div>
+                    <div class="file-card-meta">
+                        <span><i class="bi bi-aspect-ratio"></i> @ImageWidth × @ImageHeight px</span>
+                        <span><i class="bi bi-hdd"></i> @FileSize</span>
+                        <span class="badge bg-@GetFormatBadgeColor(InputFormat)">@InputFormat.ToUpper()</span>
+                    </div>
                 </div>
+                <button class="btn btn-sm btn-outline-primary" @onclick="ShowFileDetails" title="Подробная информация">
+                    <i class="bi bi-info-circle"></i> Детали
+                </button>
             </div>
         </div>
 
         <!-- Настройки конвертации -->
-        <div class="col-md-7 mb-4">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">Настройки конвертации</h5>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🎨 Настройки конвертации</h5>
                 </div>
                 <div class="card-body">
                     <!-- Выходной формат -->
                     <div class="mb-3">
                         <label class="form-label"><strong>Выходной формат:</strong></label>
                         <select class="form-select form-select-lg" value="@OutputFormat" @onchange="OnFormatChanged">
-                            @foreach (var format in ImageService.SupportedExtensions)
+                            @foreach (var format in SupportedOutputFormats)
                             {
                                 <option value="@format">@format.ToUpper() - @GetFormatName(format)</option>
                             }
@@ -81,50 +64,69 @@
 
                         @if (OutputFormat == "ico")
                         {
-                            <div class="alert alert-info mt-2 mb-0">
-                                <i class="bi bi-info-circle me-2"></i>
-                                <strong>ICO формат:</strong> Максимальный размер 256×256 пикселей.
-                                Изображение будет автоматически уменьшено с сохранением пропорций.
+                            <div class="alert alert-info mt-2 mb-0 py-2 small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>ICO:</strong> Максимум 256×256 px, автоуменьшение.
                             </div>
                         }
-                        else if (OutputFormat == "avif")
+                        else if (OutputFormat == "avif" || OutputFormat == "heic" || OutputFormat == "heif")
                         {
-                            <div class="alert alert-info mt-2 mb-0">
-                                <i class="bi bi-info-circle me-2"></i>
-                                <strong>AVIF:</strong> Современный формат с лучшим сжатием.
-                                Может не поддерживаться старыми программами.
+                            <div class="alert alert-info mt-2 mb-0 py-2 small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>@OutputFormat.ToUpper():</strong> Лучшее сжатие, но не везде поддерживается.
                             </div>
                         }
-                        else if (OutputFormat == "heic")
+                        else if (OutputFormat == "jxl")
                         {
-                            <div class="alert alert-info mt-2 mb-0">
-                                <i class="bi bi-info-circle me-2"></i>
-                                <strong>HEIC:</strong> Формат Apple. Может не открываться в Windows без дополнительных кодеков.
+                            <div class="alert alert-info mt-2 mb-0 py-2 small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>JPEG XL:</strong> Преемник JPEG. Lossless + прогрессивная загрузка.
                             </div>
                         }
                         else if (OutputFormat == "gif")
                         {
-                            <div class="alert alert-warning mt-2 mb-0">
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                                <strong>GIF:</strong> Поддерживает только 256 цветов.
-                                Не подходит для фотографий.
+                            <div class="alert alert-warning mt-2 mb-0 py-2 small">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>GIF:</strong> Только 256 цветов, не для фотографий.
+                            </div>
+                        }
+                        else if (OutputFormat == "exr" || OutputFormat == "hdr" || OutputFormat == "dpx")
+                        {
+                            <div class="alert alert-info mt-2 mb-0 py-2 small">
+                                <i class="bi bi-stars me-1"></i>
+                                <strong>@OutputFormat.ToUpper():</strong> Профессиональный формат для VFX/HDR.
+                            </div>
+                        }
+                        else if (OutputFormat == "dds")
+                        {
+                            <div class="alert alert-info mt-2 mb-0 py-2 small">
+                                <i class="bi bi-gpu-card me-1"></i>
+                                <strong>DDS:</strong> GPU-сжатие для игр (DirectX).
+                            </div>
+                        }
+                        else if (OutputFormat == "psd")
+                        {
+                            <div class="alert alert-warning mt-2 mb-0 py-2 small">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>PSD:</strong> Только чтение слоёв, запись ограничена.
                             </div>
                         }
                     </div>
 
-                    <!-- Качество (для JPG, WebP, AVIF) -->
+                    <!-- Качество -->
                     @if (ShowQualitySlider)
                     {
                         <div class="mb-3">
                             <label class="form-label">
                                 <strong>Качество: @Quality%</strong>
+                                <span class="text-muted ms-2 small">@GetQualityDescription(Quality)</span>
                             </label>
                             <input type="range" class="form-range" min="1" max="100" step="5"
                                    value="@Quality" @oninput="OnQualityChanged" />
-                            <div class="d-flex justify-content-between">
-                                <small class="text-muted">Низкое (1%)</small>
-                                <small class="text-muted">Среднее (50%)</small>
-                                <small class="text-muted">Высокое (100%)</small>
+                            <div class="d-flex justify-content-between small">
+                                <span class="text-muted">Мин. размер</span>
+                                <span class="text-muted">Баланс</span>
+                                <span class="text-muted">Макс. качество</span>
                             </div>
                         </div>
                     }
@@ -140,57 +142,30 @@
 
                         @if (ResizeEnabled)
                         {
-                            <div class="row mt-2">
-                                <div class="col-md-6">
-                                    <label class="form-label">Ширина (px):</label>
+                            <div class="row mt-2 g-2">
+                                <div class="col-6">
+                                    <label class="form-label small mb-1">Ширина (px)</label>
                                     <input type="number"
-                                           class="form-control @(IsValidImageSize(NewWidth) ? "" : "is-invalid")"
-                                           @bind="NewWidth"
-                                           min="1"
-                                           max="8192"
-                                           placeholder="1-8192" />
-                                    @if (!IsValidImageSize(NewWidth))
-                                    {
-                                        <div class="invalid-feedback">
-                                            Допустимый диапазон: 1-8192 пикселей
-                                        </div>
-                                    }
+                                           class="form-control form-control-sm @(IsValidImageSize(NewWidth) ? "" : "is-invalid")"
+                                           @bind="NewWidth" min="1" max="8192" />
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Высота (px):</label>
+                                <div class="col-6">
+                                    <label class="form-label small mb-1">Высота (px)</label>
                                     <input type="number"
-                                           class="form-control @(IsValidImageSize(NewHeight) ? "" : "is-invalid")"
-                                           @bind="NewHeight"
-                                           min="1"
-                                           max="8192"
-                                           placeholder="1-8192" />
-                                    @if (!IsValidImageSize(NewHeight))
-                                    {
-                                        <div class="invalid-feedback">
-                                            Допустимый диапазон: 1-8192 пикселей
-                                        </div>
-                                    }
+                                           class="form-control form-control-sm @(IsValidImageSize(NewHeight) ? "" : "is-invalid")"
+                                           @bind="NewHeight" min="1" max="8192" />
                                 </div>
                             </div>
                             <div class="form-check mt-2">
                                 <input class="form-check-input" type="checkbox" @bind="KeepAspectRatio" id="aspectCheck" />
-                                <label class="form-check-label" for="aspectCheck">
+                                <label class="form-check-label small" for="aspectCheck">
                                     Сохранить пропорции
                                 </label>
                             </div>
-
-                            @if (OutputFormat == "ico" && ResizeEnabled)
-                            {
-                                <div class="alert alert-warning mt-2 mb-0">
-                                    <i class="bi bi-exclamation-triangle me-2"></i>
-                                    Внимание: Для ICO размер будет ограничен 256×256 пикселей,
-                                    даже если вы указали больший размер.
-                                </div>
-                            }
                         }
                     </div>
 
-                    <!-- Дополнительные опции -->
+                    <!-- Оптимизация -->
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" @bind="OptimizeSize" id="optimizeCheck" />
@@ -205,9 +180,336 @@
                         <button class="btn btn-success btn-lg" @onclick="StartConversion" disabled="@IsConverting">
                             <i class="bi bi-play-circle"></i> @(IsConverting ? "Конвертация..." : "Начать конвертацию")
                         </button>
-                        <button class="btn btn-danger btn-lg" @onclick="CancelConversion" disabled="@(!IsConverting)">
+                        <button class="btn btn-danger" @onclick="CancelConversion" disabled="@(!IsConverting)">
                             <i class="bi bi-x-circle"></i> Отмена
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🆕 БЛОК СОВЕТОВ ПО ФОРМАТАМ -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">💡 Какой формат выбрать?</h5>
+                </div>
+
+                <!-- 🆕 ТАБЫ КАТЕГОРИЙ -->
+                <div class="tip-tabs">
+                    <button class="tip-tab @(_activeCategory == CategoryPopular ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryPopular))">
+                        <i class="bi bi-globe"></i>
+                        <span>Популярные</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategoryDesign ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryDesign))">
+                        <i class="bi bi-palette"></i>
+                        <span>Дизайн</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategoryGames ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryGames))">
+                        <i class="bi bi-controller"></i>
+                        <span>Игры</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategoryVfx ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategoryVfx))">
+                        <i class="bi bi-film"></i>
+                        <span>Видео/VFX</span>
+                    </button>
+                    <button class="tip-tab @(_activeCategory == CategorySpecial ? "active" : "")"
+                            @onclick="@(() => SetCategory(CategorySpecial))">
+                        <i class="bi bi-tools"></i>
+                        <span>Спец.</span>
+                    </button>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="format-tips fade-in">
+                        <!-- 🌐 ПОПУЛЯРНЫЕ -->
+                        @if (_activeCategory == CategoryPopular)
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("jpg"))">
+                                <div class="format-tip-icon jpg">
+                                    <i class="bi bi-camera"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        JPEG
+                                        <span class="badge bg-success ms-1">Стандарт</span>
+                                    </div>
+                                    <div class="format-tip-desc">Фото, соцсети, универсальный. С 1992 года</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("png"))">
+                                <div class="format-tip-icon png">
+                                    <i class="bi bi-file-image"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        PNG
+                                        <span class="badge bg-info ms-1">Lossless</span>
+                                    </div>
+                                    <div class="format-tip-desc">Прозрачность, логотипы, скриншоты</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("webp"))">
+                                <div class="format-tip-icon webp">
+                                    <i class="bi bi-globe2"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        WebP
+                                        <span class="badge bg-primary ms-1">Google</span>
+                                    </div>
+                                    <div class="format-tip-desc">На 30% меньше JPG. Стандарт веба с 2010</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("avif"))">
+                                <div class="format-tip-icon avif">
+                                    <i class="bi bi-stars"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        AVIF
+                                        <span class="badge bg-warning text-dark ms-1">2019</span>
+                                    </div>
+                                    <div class="format-tip-desc">Лучшее сжатие на сегодня. На основе AV1</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("gif"))">
+                                <div class="format-tip-icon gif">
+                                    <i class="bi bi-emoji-laughing"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        GIF
+                                        <span class="badge bg-dark ms-1">Мемы</span>
+                                    </div>
+                                    <div class="format-tip-desc">Анимации, 256 цветов. Легенда с 1987</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("heic"))">
+                                <div class="format-tip-icon heic">
+                                    <i class="bi bi-apple"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        HEIC
+                                        <span class="badge bg-secondary ms-1">Apple</span>
+                                    </div>
+                                    <div class="format-tip-desc">Стандарт iPhone с 2017. Эффективное сжатие</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 🎨 ДИЗАЙН/ПЕЧАТЬ -->
+                        @if (_activeCategory == CategoryDesign)
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("tiff"))">
+                                <div class="format-tip-icon tiff">
+                                    <i class="bi bi-printer"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        TIFF
+                                        <span class="badge bg-danger ms-1">Print</span>
+                                    </div>
+                                    <div class="format-tip-desc">Полиграфия, CMYK, сканеры. С 1986 года</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("bmp"))">
+                                <div class="format-tip-icon bmp">
+                                    <i class="bi bi-file-earmark-image"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">BMP</div>
+                                    <div class="format-tip-desc">Без сжатия, Windows-стандарт. Большой размер</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("pnm"))">
+                                <div class="format-tip-icon pnm">
+                                    <i class="bi bi-terminal"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">PNM (PBM/PGM/PPM)</div>
+                                    <div class="format-tip-desc">Unix-формат 80-х. Простой текстовый</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("psd"))">
+                                <div class="format-tip-icon psd">
+                                    <i class="bi bi-brush"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        PSD
+                                        <span class="badge bg-info ms-1">Photoshop</span>
+                                    </div>
+                                    <div class="format-tip-desc">Adobe Photoshop, слои. Только чтение</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 🎮 ДЛЯ ИГР -->
+                        @if (_activeCategory == CategoryGames)
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("tga"))">
+                                <div class="format-tip-icon tga">
+                                    <i class="bi bi-joystick"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        TGA (Targa)
+                                        <span class="badge bg-warning text-dark ms-1">Retro</span>
+                                    </div>
+                                    <div class="format-tip-desc">Quake, Half-Life, DOS-игры. С 1984 года</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("dds"))">
+                                <div class="format-tip-icon dds">
+                                    <i class="bi bi-gpu-card"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        DDS
+                                        <span class="badge bg-primary ms-1">DirectX</span>
+                                    </div>
+                                    <div class="format-tip-desc">Современные игры, GPU-сжатие (DXT/BC)</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("pcx"))">
+                                <div class="format-tip-icon pcx">
+                                    <i class="bi bi-cpu"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        PCX
+                                        <span class="badge bg-secondary ms-1">DOS</span>
+                                    </div>
+                                    <div class="format-tip-desc">Duke Nukem, Commander Keen, 90-е</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("sgi"))">
+                                <div class="format-tip-icon sgi">
+                                    <i class="bi bi-box"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">SGI / RGB</div>
+                                    <div class="format-tip-desc">Silicon Graphics, старые 3D-станции</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 🎬 ВИДЕО/VFX -->
+                        @if (_activeCategory == CategoryVfx)
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("dpx"))">
+                                <div class="format-tip-icon dpx">
+                                    <i class="bi bi-camera-reels"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        DPX
+                                        <span class="badge bg-danger ms-1">Hollywood</span>
+                                    </div>
+                                    <div class="format-tip-desc">Киносканеры, Kodak. Стандарт DI с 1994</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("exr"))">
+                                <div class="format-tip-icon exr">
+                                    <i class="bi bi-stars"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        OpenEXR
+                                        <span class="badge bg-warning text-dark ms-1">ILM</span>
+                                    </div>
+                                    <div class="format-tip-desc">HDR, VFX, Star Wars/Marvel. С 1999 года</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("hdr"))">
+                                <div class="format-tip-icon hdr">
+                                    <i class="bi bi-brightness-high"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">HDR (Radiance)</div>
+                                    <div class="format-tip-desc">HDR-освещение, 3D-рендеры, HDRI-карты</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("cin"))">
+                                <div class="format-tip-icon cin">
+                                    <i class="bi bi-film"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">CINEON</div>
+                                    <div class="format-tip-desc">Предшественник DPX, Kodak. Редкий</div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 🔧 СПЕЦФОРМАТЫ -->
+                        @if (_activeCategory == CategorySpecial)
+                        {
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("ico"))">
+                                <div class="format-tip-icon ico">
+                                    <i class="bi bi-app-indicator"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">ICO</div>
+                                    <div class="format-tip-desc">Иконки Windows, favicon. До 256×256 px</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("jxl"))">
+                                <div class="format-tip-icon jxl">
+                                    <i class="bi bi-lightning-charge"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        JPEG XL
+                                        <span class="badge bg-success ms-1">2022</span>
+                                    </div>
+                                    <div class="format-tip-desc">Преемник JPEG. Lossless + лучшее сжатие</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("qoi"))">
+                                <div class="format-tip-icon qoi">
+                                    <i class="bi bi-speedometer2"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">
+                                        QOI
+                                        <span class="badge bg-info ms-1">Fast</span>
+                                    </div>
+                                    <div class="format-tip-desc">Quite OK Image. В 10× быстрее PNG (2021)</div>
+                                </div>
+                            </div>
+
+                            <div class="format-tip-item" @onclick="@(() => QuickFormatSelect("ff"))">
+                                <div class="format-tip-icon ff">
+                                    <i class="bi bi-file-code"></i>
+                                </div>
+                                <div class="format-tip-info">
+                                    <div class="format-tip-name">Farbfeld</div>
+                                    <div class="format-tip-desc">suckless.org. Простой lossless, pipe-friendly</div>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -218,13 +520,20 @@
         {
             <div class="col-md-12 mb-4">
                 <div class="card border-warning">
-                    <div class="card-body text-center">
-                        <h5>Конвертация...</h5>
-                        <div class="progress" style="height: 30px;">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3 mb-2">
+                            <div class="spinner-border text-warning" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                            <div>
+                                <h5 class="mb-0">⏳ Конвертация изображения...</h5>
+                                <small class="text-muted">@Progress%</small>
+                            </div>
+                        </div>
+                        <div class="progress" style="height: 25px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark"
-                                 role="progressbar"
-                                 style="width: @Progress%">
-                                @Progress%
+                                 role="progressbar" style="width: @Progress%">
+                                <strong>@Progress%</strong>
                             </div>
                         </div>
                     </div>
@@ -232,46 +541,54 @@
             </div>
         }
 
-
-        <!-- Результат -->
-        @if (IsConverted)
+        <!-- 🆕 РЕЗУЛЬТАТ КОНВЕРТАЦИИ (как в AudioConverter) -->
+        @if (IsConverted && ConvertedData != null)
         {
-            <div class="col-md-12 mb-4" id="resultSection">
-                <div class="card border-success bg-light shadow-lg">
-                    <div class="card-body text-center p-5">
-                        <h2 class="text-success mb-3">
-                            <i class="bi bi-check-circle-fill"></i> Конвертация завершена!
-                        </h2>
-                        <p class="lead mb-4">
-                            Файл успешно сконвертирован в формат <strong>@OutputFormat.ToUpper()</strong><br />
-                            <small class="text-muted">
-                                Размер: @GetConvertedSize()
-                                @if (OriginalSize > 0 && ConvertedSize > 0)
-                                {
-                                    var change = ((double)(ConvertedSize - OriginalSize) / OriginalSize * 100);
-                                    <span class="@((change < 0) ? "text-success" : "text-danger")">
-                                        (@(change > 0 ? "+" : "")@change.ToString("F1")%)
-                                    </span>
-                                }
-                            </small>
-                        </p>
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                            <button class="btn btn-primary btn-lg" @onclick="SaveFile">
-                                <i class="bi bi-download me-2"></i>Сохранить файл
+            <div class="col-md-12 mb-4">
+                <div class="card border-success">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="success-icon me-3">
+                                <i class="bi bi-check-circle-fill"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 text-success">Конвертация завершена!</h6>
+                                <small class="text-muted">
+                                    Формат: <strong>@OutputFormat.ToUpper()</strong>
+                                    @if (ConvertedSize > 0)
+                                    {
+                                        <span> • @FormatBytes(ConvertedSize)</span>
+                                        @if (OriginalSize > 0)
+                                        {
+                                            var change = ((double)(ConvertedSize - OriginalSize) / OriginalSize * 100);
+                                            <span class="@((change < 0) ? "text-success" : "text-danger") ms-2">
+                                                (@(change > 0 ? "+" : "")@change.ToString("F1")%)
+                                            </span>
+                                        }
+                                    }
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="btn btn-success" @onclick="SaveFile">
+                                <i class="bi bi-download me-2"></i>Сохранить на диск...
                             </button>
+
                             @if (!string.IsNullOrEmpty(SavedFilePath) && File.Exists(SavedFilePath))
                             {
-                                <button class="btn btn-success btn-lg" @onclick="OpenFolder">
-                                    <i class="bi bi-folder2-open me-2"></i>Открыть папку с файлом
+                                <button class="btn btn-outline-primary" @onclick="OpenFolder">
+                                    <i class="bi bi-folder2-open me-2"></i>Открыть папку
                                 </button>
                             }
-                            <button class="btn btn-secondary btn-lg" @onclick="ResetConverter">
+                            <button class="btn btn-outline-secondary" @onclick="ResetConverter">
                                 <i class="bi bi-arrow-clockwise me-2"></i>Новый файл
                             </button>
                         </div>
+
                         @if (!string.IsNullOrEmpty(SavedFilePath))
                         {
-                            <div class="mt-3 text-muted small">
+                            <div class="mt-3 small text-muted">
                                 <i class="bi bi-check-circle text-success me-1"></i>
                                 Сохранено: @SavedFilePath
                             </div>
@@ -283,7 +600,602 @@
     </div>
 }
 
+<!-- 🆕 МОДАЛЬНОЕ ОКНО С ДЕТАЛЯМИ + ПРЕВЬЮ -->
+@if (_showFileDetailsModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content details-modal">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-info-circle me-2"></i>Информация об изображении
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseFileDetails"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Превью -->
+                    @if (!string.IsNullOrEmpty(PreviewBase64))
+                    {
+                        <div class="image-preview-container mb-3">
+                            <img src="data:image/png;base64,@PreviewBase64"
+                                 class="img-fluid rounded"
+                                 alt="Preview" />
+                        </div>
+                    }
+
+                    <!-- Заголовок -->
+                    <div class="details-title mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="file-modal-icon image me-3">
+                                <i class="bi bi-image-fill"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold mb-1">@FileName</h6>
+                                <small class="text-muted">Исходное изображение</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Таблица деталей -->
+                    <div class="details-table">
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-file-earmark text-primary"></i> Формат
+                            </div>
+                            <div class="detail-value">
+                                <span class="badge bg-@GetFormatBadgeColor(InputFormat) fs-6">
+                                    @InputFormat.ToUpper()
+                                </span>
+                                <small class="text-muted ms-2">@GetFormatFullName(InputFormat)</small>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-aspect-ratio text-info"></i> Разрешение
+                            </div>
+                            <div class="detail-value">
+                                <strong>@ImageWidth × @ImageHeight px</strong>
+                                <small class="text-muted ms-2">
+                                    (@(((long)ImageWidth * ImageHeight).ToString("N0")) пикселей,
+                                    @GetAspectRatioName(ImageWidth, ImageHeight))
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-hdd text-warning"></i> Размер
+                            </div>
+                            <div class="detail-value">
+                                <strong>@FileSize</strong>
+                                <small class="text-muted ms-2">(@OriginalSize.ToString("N0") байт)</small>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-folder text-secondary"></i> Путь
+                            </div>
+                            <div class="detail-value">
+                                <div class="d-flex align-items-start gap-2">
+                                    <span class="text-break flex-grow-1" title="@InputFilePath">
+                                        @InputFilePath
+                                    </span>
+                                    <button class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                                            @onclick="@(() => CopyToClipboard(InputFilePath ?? string.Empty))"
+                                            title="Скопировать путь">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">
+                                <i class="bi bi-check-circle text-success"></i> Файл существует
+                            </div>
+                            <div class="detail-value">
+                                @if (!string.IsNullOrEmpty(InputFilePath) && File.Exists(InputFilePath))
+                                {
+                                    <span class="badge bg-success">✅ Да</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger">❌ Нет</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-primary" @onclick="@(() => CopyToClipboard(FileName))">
+                        <i class="bi bi-clipboard me-1"></i> Копировать имя
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="@(() => CopyToClipboard(InputFilePath ?? string.Empty))">
+                        <i class="bi bi-link-45deg me-1"></i> Копировать путь
+                    </button>
+                    <button class="btn btn-success" @onclick="OpenInputFileLocation">
+                        <i class="bi bi-folder2-open me-1"></i> Открыть папку
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CloseFileDetails">
+                        <i class="bi bi-x-lg me-1"></i> Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+
+        /* 🆕 Табы категорий */
+    .tip-tabs {
+        display: flex;
+        gap: 0;
+        padding: 0.5rem 0.5rem 0;
+        background: rgba(40, 167, 69, 0.05);
+        border-bottom: 1px solid rgba(40, 167, 69, 0.15);
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .tip-tabs::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .tip-tabs::-webkit-scrollbar-thumb {
+        background: rgba(40, 167, 69, 0.3);
+        border-radius: 2px;
+    }
+
+    .tip-tab {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 0.875rem;
+        background: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: #666;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .tip-tab:hover {
+        background: rgba(40, 167, 69, 0.08);
+        color: #28a745;
+    }
+
+    .tip-tab.active {
+        color: #28a745;
+        border-bottom-color: #28a745;
+        background: rgba(40, 167, 69, 0.08);
+        font-weight: 600;
+    }
+
+    .tip-tab i {
+        font-size: 1rem;
+    }
+
+    body.dark-theme .tip-tabs {
+        background: rgba(40, 167, 69, 0.08);
+        border-bottom-color: rgba(40, 167, 69, 0.2);
+    }
+
+    body.dark-theme .tip-tab {
+        color: #aaa;
+    }
+
+    body.dark-theme .tip-tab:hover,
+    body.dark-theme .tip-tab.active {
+        color: #20c997;
+        border-bottom-color: #20c997;
+        background: rgba(40, 167, 69, 0.12);
+    }
+
+    .format-tips.fade-in {
+        animation: tipsFadeIn 0.25s ease-out;
+    }
+
+    @@keyframes tipsFadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 🆕 Новые градиенты иконок */
+    .format-tip-icon.gif {
+        background: linear-gradient(135deg, #343a40 0%, #212529 100%);
+    }
+
+    .format-tip-icon.heic {
+        background: linear-gradient(135deg, #495057 0%, #212529 100%);
+    }
+
+    .format-tip-icon.tiff {
+        background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%);
+    }
+
+    .format-tip-icon.pnm {
+        background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+    }
+
+    .format-tip-icon.psd {
+        background: linear-gradient(135deg, #31a8ff 0%, #001e36 100%);
+    }
+
+    .format-tip-icon.tga {
+        background: linear-gradient(135deg, #fd7e14 0%, #c65100 100%);
+    }
+
+    .format-tip-icon.dds {
+        background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+    }
+
+    .format-tip-icon.pcx {
+        background: linear-gradient(135deg, #6c757d 0%, #343a40 100%);
+    }
+
+    .format-tip-icon.sgi {
+        background: linear-gradient(135deg, #8b4513 0%, #654321 100%);
+    }
+
+    .format-tip-icon.dpx {
+        background: linear-gradient(135deg, #b02a37 0%, #5a1a21 100%);
+    }
+
+    .format-tip-icon.exr {
+        background: linear-gradient(135deg, #ffc107 0%, #ff8800 100%);
+    }
+
+    .format-tip-icon.hdr {
+        background: linear-gradient(135deg, #ffeb3b 0%, #ff9800 100%);
+    }
+
+    .format-tip-icon.cin {
+        background: linear-gradient(135deg, #795548 0%, #3e2723 100%);
+    }
+
+    .format-tip-icon.jxl {
+        background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+    }
+
+    .format-tip-icon.qoi {
+        background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+    }
+
+    .format-tip-icon.ff {
+        background: linear-gradient(135deg, #263238 0%, #000000 100%);
+    }
+
+
+    /* Компактная карточка файла */
+    .file-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.08) 0%, rgba(32, 201, 151, 0.08) 100%);
+        border: 1px solid rgba(40, 167, 69, 0.2);
+        border-radius: 12px;
+        transition: all 0.2s ease;
+    }
+
+        .file-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.15);
+        }
+
+    body.dark-theme .file-card {
+        background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(32, 201, 151, 0.15) 100%);
+        border-color: rgba(40, 167, 69, 0.3);
+    }
+
+    .file-card-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+        .file-card-icon.image {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+    .file-card-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .file-card-name {
+        font-weight: 600;
+        font-size: 1rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 0.25rem;
+    }
+
+    body.dark-theme .file-card-name {
+        color: #fff;
+    }
+
+    .file-card-meta {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        font-size: 0.875rem;
+        color: #666;
+    }
+
+        .file-card-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+    body.dark-theme .file-card-meta {
+        color: #aaa;
+    }
+
+    /* Блок советов по форматам */
+    .format-tips {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .format-tip-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem 1.25rem;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .format-tip-item:last-child {
+            border-bottom: none;
+        }
+
+        .format-tip-item:hover {
+            background: rgba(40, 167, 69, 0.05);
+            transform: translateX(4px);
+        }
+
+    body.dark-theme .format-tip-item {
+        border-bottom-color: #2a2a3e;
+    }
+
+        body.dark-theme .format-tip-item:hover {
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+    .format-tip-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+        .format-tip-icon.jpg {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .format-tip-icon.png {
+            background: linear-gradient(135deg, #17a2b8 0%, #0dcaf0 100%);
+        }
+
+        .format-tip-icon.webp {
+            background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+        }
+
+        .format-tip-icon.avif {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+
+        .format-tip-icon.ico {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+
+        .format-tip-icon.bmp {
+            background: linear-gradient(135deg, #dc3545 0%, #e91e63 100%);
+        }
+
+    .format-tip-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .format-tip-name {
+        font-weight: 600;
+        margin-bottom: 0.125rem;
+    }
+
+    body.dark-theme .format-tip-name {
+        color: #fff;
+    }
+
+    .format-tip-desc {
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    body.dark-theme .format-tip-desc {
+        color: #aaa;
+    }
+
+    /* Превью изображения в модалке */
+    .image-preview-container {
+        background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+        max-height: 300px;
+        overflow: hidden;
+    }
+
+    body.dark-theme .image-preview-container {
+        background: linear-gradient(45deg, #2a2a3e 25%, transparent 25%), linear-gradient(-45deg, #2a2a3e 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a3e 75%), linear-gradient(-45deg, transparent 75%, #2a2a3e 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+
+    .image-preview-container img {
+        max-height: 280px;
+        object-fit: contain;
+    }
+
+    /* Иконка в модалке */
+    .file-modal-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 2rem;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+        .file-modal-icon.image {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+    /* Стили модального окна */
+    .details-modal {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+        .details-modal .modal-header {
+            border-bottom: none;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .details-modal .modal-body {
+            padding: 1.5rem;
+        }
+
+    body.dark-theme .details-modal {
+        background: #1e1e2e;
+        color: #e0e0e0;
+    }
+
+        body.dark-theme .details-modal .modal-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+        }
+
+        body.dark-theme .details-modal .modal-footer {
+            background: #181825;
+            border-top: 1px solid #2a2a3e;
+        }
+
+        body.dark-theme .details-modal .details-title h6 {
+            color: #fff;
+        }
+
+    .details-table {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    body.dark-theme .details-table {
+        border-color: #3a3a5a;
+        background: #252538;
+    }
+
+    .detail-row {
+        display: flex;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    body.dark-theme .detail-row {
+        border-bottom-color: #2a2a3e;
+    }
+
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        flex: 0 0 140px;
+        font-weight: 600;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    body.dark-theme .detail-label {
+        color: #aaa;
+    }
+
+    .detail-value {
+        flex: 1;
+        word-break: break-word;
+        min-width: 0;
+    }
+
+    body.dark-theme .detail-value {
+        color: #e0e0e0;
+    }
+
+    /* Иконка успеха */
+    .success-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    body.dark-theme .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.75);
+    }
+</style>
+
 @code {
+    // 🆕 Константы категорий
+    private const string CategoryPopular = "popular";
+    private const string CategoryDesign = "design";
+    private const string CategoryGames = "games";
+    private const string CategoryVfx = "vfx";
+    private const string CategorySpecial = "special";
+
+    // 🆕 Активная категория табов
+    private string _activeCategory = CategoryPopular;
+
     private string FileName = "";
     private string FileSize = "";
     private string InputFormat = "";
@@ -305,12 +1217,28 @@
     private CancellationTokenSource? Cts;
     private long OriginalSize;
     private long ConvertedSize;
-    private string? SavedFilePath; 
+    private string? SavedFilePath;
 
-    private readonly string[] AllowedExtensions = { "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "tiff", "ico" };
+    private bool _showFileDetailsModal = false;
+
+    private readonly string[] AllowedExtensions = {
+        "jpg", "jpeg", "png", "gif", "webp", "avif", "heic", "heif",
+        "bmp", "tiff", "tif", "pnm", "pbm", "pgm", "ppm", "psd",
+        "tga", "dds", "pcx", "sgi", "rgb",
+        "dpx", "exr", "hdr", "cin",
+        "ico", "jxl", "qoi", "ff"
+    };
+
+    private readonly string[] SupportedOutputFormats = {
+        // Популярные (6)
+        "jpg", "png", "webp", "avif", "gif", "heic",
+        "tiff", "bmp", "pnm", "psd",
+        "tga", "dds", "pcx", "sgi",
+        "dpx", "exr", "hdr", "cin",
+        "ico", "jxl", "qoi", "ff"
+    };
 
     private bool ShowQualitySlider => OutputFormat is "jpg" or "jpeg" or "webp" or "avif";
-
     private bool IsValidImageSize(int size) => size >= 1 && size <= 8192;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -319,28 +1247,160 @@
         {
             try
             {
-                // Подписываемся на горячие клавиши
                 Hotkeys.OnCancelRequested += HandleCancel;
-
-                // Инициализируем с защитой от ошибок
                 await Hotkeys.InitializeAsync();
             }
             catch (Exception ex)
             {
-                // Если горячие клавиши не работают — это не критично
-                // Логируем и продолжаем работу
-                try
-                {
-                    Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}");
-                }
-                catch { }
+                try { Logger.LogWarning($"Горячие клавиши не инициализированы: {ex.Message}"); } catch { }
             }
         }
     }
 
-    private async Task HandleCancel()
+    private Task HandleCancel()
     {
         if (IsConverting) CancelConversion();
+        return Task.CompletedTask;
+    }
+
+    private void SetCategory(string category)
+    {
+        if (_activeCategory != category)
+        {
+            _activeCategory = category;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowFileDetails()
+    {
+        _showFileDetailsModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseFileDetails()
+    {
+        _showFileDetailsModal = false;
+        StateHasChanged();
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            await ShowToast("📋 Скопировано в буфер обмена", ToastType.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"Ошибка копирования: {ex.Message}");
+            await ShowToast("❌ Не удалось скопировать", ToastType.Error);
+        }
+    }
+
+    private void OpenInputFileLocation()
+    {
+        if (string.IsNullOrEmpty(InputFilePath)) return;
+        try
+        {
+            var normalizedPath = Path.GetFullPath(InputFilePath).Replace('/', '\\');
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = "/select,\"" + normalizedPath + "\"",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Ошибка открытия папки: {ex.Message}");
+            _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
+        }
+    }
+
+    private void QuickFormatSelect(string format)
+    {
+        OutputFormat = format;
+        StateHasChanged();
+        _ = ShowToast($"✅ Выбран формат: {format.ToUpper()}", ToastType.Success);
+    }
+
+    private string GetFormatBadgeColor(string format) => format.ToLower() switch
+    {
+        "jpg" or "jpeg" or "webp" or "jxl" => "success",
+        "png" or "tiff" or "tif" => "info",
+        "avif" or "exr" or "hdr" => "warning text-dark",
+        "gif" or "bmp" or "pcx" => "dark",
+        "ico" or "dds" or "heic" or "heif" => "secondary",
+        "tga" or "dpx" or "cin" => "danger",
+        "qoi" or "ff" or "pnm" => "primary",
+        _ => "secondary"
+    };
+
+    private string GetFormatFullName(string format) => format.ToLower() switch
+    {
+        "jpg" or "jpeg" => "Joint Photographic Experts Group",
+        "png" => "Portable Network Graphics",
+        "webp" => "Web Picture Format (Google)",
+        "avif" => "AV1 Image File Format",
+        "gif" => "Graphics Interchange Format",
+        "heic" or "heif" => "High Efficiency Image Format (Apple)",
+        "tiff" or "tif" => "Tagged Image File Format",
+        "bmp" => "Bitmap Image (Windows)",
+        "pnm" or "pbm" or "pgm" or "ppm" => "Portable Anymap (Unix)",
+        "psd" => "Adobe Photoshop Document",
+        "tga" => "Truevision Targa",
+        "dds" => "DirectDraw Surface (Microsoft)",
+        "pcx" => "PiCture eXchange (ZSoft)",
+        "sgi" or "rgb" => "Silicon Graphics Image",
+        "dpx" => "Digital Picture Exchange (Kodak)",
+        "exr" => "OpenEXR (Industrial Light & Magic)",
+        "hdr" => "Radiance HDR (High Dynamic Range)",
+        "cin" => "Cineon (Kodak)",
+        "ico" => "Windows Icon",
+        "jxl" => "JPEG XL (ISO/IEC 18181)",
+        "qoi" => "Quite OK Image Format",
+        "ff" => "Farbfeld (suckless.org)",
+        _ => "Unknown Format"
+    };
+
+    private string GetQualityDescription(int quality)
+    {
+        if (quality >= 90) return "🌟 Отличное";
+        if (quality >= 75) return "⭐ Высокое";
+        if (quality >= 50) return "✅ Среднее";
+        if (quality >= 25) return "📱 Низкое";
+        return "📉 Минимальное";
+    }
+
+    private string GetAspectRatioName(int width, int height)
+    {
+        if (width == 0 || height == 0) return "";
+        var gcd = GCD(width, height);
+        var w = width / gcd;
+        var h = height / gcd;
+        var ratio = (double)width / height;
+
+        if (Math.Abs(ratio - 1.0) < 0.05) return "1:1 (квадрат)";
+        if (Math.Abs(ratio - 16.0 / 9) < 0.05) return "16:9 (широкий)";
+        if (Math.Abs(ratio - 4.0 / 3) < 0.05) return "4:3 (стандарт)";
+        if (Math.Abs(ratio - 3.0 / 2) < 0.05) return "3:2 (фото)";
+        if (Math.Abs(ratio - 21.0 / 9) < 0.05) return "21:9 (ультраширокий)";
+        if (Math.Abs(ratio - 9.0 / 16) < 0.05) return "9:16 (вертикальный)";
+        return $"{w}:{h}";
+    }
+
+    private int GCD(int a, int b)
+    {
+        while (b != 0)
+        {
+            var temp = b;
+            b = a % b;
+            a = temp;
+        }
+        return a;
     }
 
     private async Task SelectFile()
@@ -357,35 +1417,29 @@
 
             var ext = Path.GetExtension(result.FullPath).TrimStart('.').ToLower();
 
-            // ПРОВЕРКА 1: Расширение
             if (!AllowedExtensions.Contains(ext))
             {
-                Logger.LogWarning($"Изображения: отклонён файл с недопустимым расширением .{ext} - {Path.GetFileName(result.FullPath)}");
-                await ShowToast($"❌ Формат .{ext.ToUpper()} не поддерживается!\n\nВыберите изображение.", ToastType.Error);
+                Logger.LogWarning($"Изображения: отклонён файл .{ext}");
+                await ShowToast($"❌ Формат .{ext.ToUpper()} не поддерживается!", ToastType.Error);
                 return;
             }
 
-            // ПРОВЕРКА 2: Размер файла
             var fileInfo = new FileInfo(result.FullPath);
             if (fileInfo.Length == 0)
             {
-                Logger.LogWarning($"Изображения: отклонён пустой файл - {Path.GetFileName(result.FullPath)}");
                 await ShowToast("❌ Файл пустой (0 байт)!", ToastType.Error);
                 return;
             }
 
             if (fileInfo.Length > 500L * 1024 * 1024)
             {
-                Logger.LogWarning($"Изображения: отклонён слишком большой файл - {Path.GetFileName(result.FullPath)} ({fileInfo.Length} байт)");
                 await ShowToast("❌ Файл слишком большой (максимум 500 МБ)!", ToastType.Error);
                 return;
             }
 
-            // ПРОВЕРКА 3: Magic numbers
             if (!ValidateImageContent(result.FullPath, ext))
             {
-                Logger.LogWarning($"Изображения: отклонён файл с неверным содержимым - {Path.GetFileName(result.FullPath)}");
-                await ShowToast($"❌ Содержимое файла не соответствует формату {ext.ToUpper()}!\n\nВозможно, файл переименован или повреждён.", ToastType.Error);
+                await ShowToast($"❌ Содержимое не соответствует формату {ext.ToUpper()}!", ToastType.Error);
                 return;
             }
 
@@ -394,12 +1448,11 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Изображения: ошибка выбора файла", ex);
-            await ShowToast($"❌ Ошибка выбора файла: {ex.Message}", ToastType.Error);
+            Logger.LogError("Изображения: ошибка выбора файла", ex);
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
         }
     }
 
-    // Проверка magic numbers для изображений
     private bool ValidateImageContent(string filePath, string extension)
     {
         try
@@ -407,9 +1460,9 @@
             var fileInfo = new FileInfo(filePath);
             if (fileInfo.Length < 4) return false;
 
-            var buffer = new byte[12];
+            var buffer = new byte[16];
             using var fs = File.OpenRead(filePath);
-            fs.Read(buffer, 0, Math.Min(12, (int)fileInfo.Length));
+            fs.Read(buffer, 0, Math.Min(16, (int)fileInfo.Length));
 
             return extension.ToLower() switch
             {
@@ -419,16 +1472,27 @@
                 "bmp" => buffer[0] == 0x42 && buffer[1] == 0x4D,
                 "webp" => buffer.Length >= 12 && buffer[0] == 0x52 && buffer[1] == 0x49 && buffer[2] == 0x46 && buffer[3] == 0x46 &&
                           buffer[8] == 0x57 && buffer[9] == 0x45 && buffer[10] == 0x42 && buffer[11] == 0x50,
-                "tiff" => (buffer[0] == 0x49 && buffer[1] == 0x49) || (buffer[0] == 0x4D && buffer[1] == 0x4D),
+                "tiff" or "tif" => (buffer[0] == 0x49 && buffer[1] == 0x49 && buffer[2] == 0x2A) ||
+                                    (buffer[0] == 0x4D && buffer[1] == 0x4D && buffer[3] == 0x2A),
                 "ico" => buffer[0] == 0x00 && buffer[1] == 0x00 && buffer[2] == 0x01 && buffer[3] == 0x00,
-                "avif" => buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 && buffer[7] == 0x70,
-                // GIF, HEIC - сложно определить, пропускаем
+                "avif" or "heic" or "heif" => buffer.Length >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 &&
+                                               buffer[6] == 0x79 && buffer[7] == 0x70,
+                "tga" => true,
+                "dds" => buffer[0] == 0x44 && buffer[1] == 0x44 && buffer[2] == 0x53 && buffer[3] == 0x20,
+                "pcx" => buffer[0] == 0x0A,
+                "exr" => buffer[0] == 0x76 && buffer[1] == 0x2F && buffer[2] == 0x31 && buffer[3] == 0x01,
+                "hdr" => buffer[0] == 0x23 && buffer[1] == 0x3F,
+                "dpx" => buffer[0] == 0x53 && buffer[1] == 0x44 && buffer[2] == 0x50 && buffer[3] == 0x58,
+                "jxl" => buffer[0] == 0xFF && buffer[1] == 0x0A,
+                "qoi" => buffer[0] == 0x71 && buffer[1] == 0x6F && buffer[2] == 0x69 && buffer[3] == 0x66,
+                "ff" => buffer[0] == 0x66 && buffer[1] == 0x61 && buffer[2] == 0x72 && buffer[3] == 0x62,
+                "psd" => buffer[0] == 0x38 && buffer[1] == 0x42 && buffer[2] == 0x50 && buffer[3] == 0x53,
+                "pnm" or "pbm" or "pgm" or "ppm" => buffer[0] == 0x50 && buffer[1] >= 0x31 && buffer[1] <= 0x36,
                 _ => true
             };
         }
-        catch (Exception ex)
+        catch
         {
-            Logger.LogError($"Ошибка проверки magic numbers: {filePath}", ex);
             return true;
         }
     }
@@ -457,13 +1521,13 @@
             IsConverted = false;
             ConvertedData = null;
             Progress = 0;
-
+            SavedFilePath = null;
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Изображения: ошибка загрузки", ex);
-            await ShowToast($"❌ Ошибка загрузки изображения: {ex.Message}", ToastType.Error);
+            Logger.LogError("Изображения: ошибка загрузки", ex);
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
         }
     }
 
@@ -480,17 +1544,20 @@
 
         if (ResizeEnabled && (!IsValidImageSize(NewWidth) || !IsValidImageSize(NewHeight)))
         {
-            await ShowToast("❌ Недопустимый размер!\n\nДопустимый диапазон: 1-8192 пикселей", ToastType.Error);
+            await ShowToast("❌ Недопустимый размер (1-8192 px)", ToastType.Error);
             return;
         }
 
         IsConverting = true;
         IsConverted = false;
-        Progress = 0;
+        Progress = 10;
         Cts = new CancellationTokenSource();
 
         try
         {
+            Progress = 30;
+            StateHasChanged();
+
             var options = new ImageConversionOptions
             {
                 OutputFormat = OutputFormat,
@@ -499,29 +1566,31 @@
                 Width = ResizeEnabled ? NewWidth : ImageWidth,
                 Height = ResizeEnabled ? NewHeight : ImageHeight,
                 KeepAspectRatio = KeepAspectRatio,
-                OptimizeSize = OptimizeSize  // ← ИСПРАВЛЕНО: было OptimizeImages
+                OptimizeSize = OptimizeSize
             };
+
+            Progress = 60;
+            StateHasChanged();
 
             ConvertedData = await ImageService.ConvertAdvancedAsync(InputFilePath, options);
             ConvertedSize = ConvertedData.Length;
 
-            IsConverted = true;
             Progress = 100;
+            IsConverted = true;
 
             Logger.LogInfo($"Изображения: конвертация завершена - {FileName} -> {OutputFormat} ({ConvertedSize} байт)");
             await ShowToast("✅ Конвертация завершена!", ToastType.Success);
             StateHasChanged();
-            await ScrollToElement("resultSection");
         }
         catch (OperationCanceledException)
         {
-            Logger.LogInfo($"Изображения: конвертация отменена");
+            Logger.LogInfo("Изображения: конвертация отменена");
             await ShowToast("⚠️ Конвертация отменена", ToastType.Warning);
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Изображения: ошибка конвертации", ex);
-            await ShowToast($"❌ Ошибка конвертации: {ex.Message}", ToastType.Error);
+            Logger.LogError("Изображения: ошибка конвертации", ex);
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
         }
         finally
         {
@@ -529,39 +1598,6 @@
             StateHasChanged();
         }
     }
-
-    private void CleanupMagickTempFiles(HashSet<string> filesBefore)
-    {
-        try
-        {
-            var tempPath = Path.GetTempPath();
-            foreach (var file in Directory.GetFiles(tempPath, "magick-*"))
-            {
-                // Удаляем только те, которых не было до конвертации
-                if (!filesBefore.Contains(file))
-                {
-                    try
-                    {
-                        var fileInfo = new FileInfo(file);
-                        // Удаляем только старые файлы (старше 5 минут)
-                        if (fileInfo.LastWriteTime < DateTime.Now.AddMinutes(-5))
-                        {
-                            fileInfo.Delete();
-                            Logger.LogInfo($"Изображения: удалён temp файл ImageMagick ({fileInfo.Length} байт)");
-                        }
-                    }
-                    catch { }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning($"Изображения: ошибка очистки temp файлов ImageMagick: {ex.Message}");
-        }
-    }
-
-
-    private async Task ScrollToElement(string elementId) { try { await JSRuntime.InvokeVoidAsync("scrollToElement", elementId); } catch { } }
 
     private void CancelConversion() => Cts?.Cancel();
 
@@ -587,84 +1623,42 @@
             var savePath = Path.Combine(folder, suggestedName);
 
             await File.WriteAllBytesAsync(savePath, ConvertedData);
-
-            // СОХРАНЯЕМ путь для кнопки "Открыть папку"
             SavedFilePath = savePath;
 
             Logger.LogInfo($"Изображения: файл сохранён - {savePath}");
-            await ShowToast($"✅ Файл сохранён:\n{savePath}", ToastType.Success);
+            await ShowToast("✅ Файл сохранён", ToastType.Success);
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Logger.LogError($"Изображения: ошибка сохранения", ex);
-            await ShowToast($"❌ Ошибка сохранения: {ex.Message}", ToastType.Error);
+            Logger.LogError("Изображения: ошибка сохранения", ex);
+            await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
         }
     }
 
     private async Task OpenFolder()
     {
-        // Если файл сохранён — открываем папку с ним
-        if (!string.IsNullOrEmpty(SavedFilePath) && File.Exists(SavedFilePath))
+        if (string.IsNullOrEmpty(SavedFilePath) || !File.Exists(SavedFilePath))
         {
-            try
-            {
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = "/select,\"" + SavedFilePath + "\"",
-                    UseShellExecute = true
-                };
-                System.Diagnostics.Process.Start(psi);
-                Logger.LogInfo($"Изображения: открыта папка с сохранённым файлом {SavedFilePath}");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError("Изображения: ошибка открытия папки", ex);
-                await ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
-            }
+            _ = ShowToast("⚠️ Файл не найден", ToastType.Warning);
             return;
         }
 
-        // Если файл НЕ сохранён — показываем предупреждение
-        if (ConvertedData == null)
-        {
-            _ = ShowToast("⚠️ Сначала сохраните файл", ToastType.Warning);
-            return;
-        }
-
-        // Fallback: сохраняем во временную папку и открываем
         try
         {
-            var tempFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Preview");
-            Directory.CreateDirectory(tempFolder);
-
-            var baseName = Path.GetFileNameWithoutExtension(FileName);
-            var previewPath = Path.Combine(tempFolder, $"{baseName}_preview.{OutputFormat}");
-
-            File.WriteAllBytes(previewPath, ConvertedData);
-
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "explorer.exe",
-                Arguments = "/select,\"" + previewPath + "\"",
+                Arguments = "/select,\"" + SavedFilePath + "\"",
                 UseShellExecute = true
             };
             System.Diagnostics.Process.Start(psi);
-
-            _ = ShowToast("⚠️ Файл открыт из временной папки. Сохраните его в нужное место.", ToastType.Warning);
         }
         catch (Exception ex)
         {
             Logger.LogError("Изображения: ошибка открытия папки", ex);
             _ = ShowToast($"❌ Ошибка: {ex.Message}", ToastType.Error);
         }
-    }
-
-    private bool HasEnoughDiskSpace(string path, long requiredBytes)
-    {
-        var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!);
-        return drive.AvailableFreeSpace > requiredBytes;
     }
 
     private void ResetConverter()
@@ -681,7 +1675,7 @@
         NewWidth = 0;
         NewHeight = 0;
         KeepAspectRatio = true;
-        OptimizeSize = false;  // ← ДОБАВЛЕНО
+        OptimizeSize = false;
         IsConverting = false;
         IsConverted = false;
         Progress = 0;
@@ -689,6 +1683,9 @@
         ConvertedData = null;
         OriginalSize = 0;
         ConvertedSize = 0;
+        SavedFilePath = null;
+        _showFileDetailsModal = false;
+        _activeCategory = CategoryPopular;
         Cts?.Dispose();
         Cts = null;
         StateHasChanged();
@@ -696,25 +1693,39 @@
 
     private string FormatBytes(long bytes)
     {
-        const long kb = 1024, mb = kb * 1024;
-        if (bytes >= mb) return $"{(bytes / (double)mb):F2} MB";
-        if (bytes >= kb) return $"{(bytes / (double)kb):F2} KB";
-        return $"{bytes} B";
+        const long kb = 1024, mb = kb * 1024, gb = mb * 1024;
+        if (bytes >= gb) return $"{(bytes / (double)gb):F2} ГБ";
+        if (bytes >= mb) return $"{(bytes / (double)mb):F2} МБ";
+        if (bytes >= kb) return $"{(bytes / (double)kb):F2} КБ";
+        return $"{bytes} Б";
     }
 
-    private string GetFormatName(string format) => format switch
+    private string GetFormatName(string format) => format.ToLower() switch
     {
-        "jpg" or "jpeg" => "JPEG (с потерями)",
-        "png" => "PNG (без потерь)",
-        "webp" => "WebP (современный)",
-        "avif" => "AVIF (лучшее сжатие)",
-        "ico" => "ICO (иконки)",
-        "bmp" => "BMP (без сжатия)",
-        "tiff" => "TIFF (профессиональный)",
+        "jpg" or "jpeg" => "универсальный",
+        "png" => "без потерь",
+        "webp" => "Google, для веба",
+        "avif" => "лучшее сжатие",
+        "gif" => "анимации, 256 цветов",
+        "heic" or "heif" => "Apple iPhone",
+        "tiff" or "tif" => "полиграфия, CMYK",
+        "bmp" => "без сжатия, Windows",
+        "pnm" or "pbm" or "pgm" or "ppm" => "Unix, простой",
+        "psd" => "Photoshop",
+        "tga" => "старые игры, Targa",
+        "dds" => "DirectX текстуры",
+        "pcx" => "DOS-игры",
+        "sgi" or "rgb" => "Silicon Graphics",
+        "dpx" => "киносканеры",
+        "exr" => "VFX, HDR, ILM",
+        "hdr" => "HDR-освещение",
+        "cin" => "Kodak Cineon",
+        "ico" => "иконки Windows",
+        "jxl" => "преемник JPEG",
+        "qoi" => "быстрый lossless",
+        "ff" => "farbfeld, простой",
         _ => format.ToUpper()
     };
-
-    private string GetConvertedSize() => ConvertedSize == 0 ? "" : FormatBytes(ConvertedSize);
 
     private async Task ShowToast(string message, ToastType type = ToastType.Info)
     {

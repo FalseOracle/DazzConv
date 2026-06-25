@@ -2,8 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
-        <WindowsPackageType>None</WindowsPackageType>
-         <OutputType>WinExe</OutputType>
+        <OutputType>WinExe</OutputType>
         <RootNamespace>DazzConv</RootNamespace>
         <UseMaui>true</UseMaui>
         <SingleProject>true</SingleProject>
@@ -11,9 +10,11 @@
         <EnableDefaultCssItems>false</EnableDefaultCssItems>
         <Nullable>enable</Nullable>
 
+        <!-- Self-contained для Velopack (работает в обеих конфигурациях) -->
         <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
         <SelfContained>true</SelfContained>
 
+        <!-- Метаданные приложения -->
         <ApplicationTitle>DazzConv</ApplicationTitle>
         <ApplicationId>com.falseoracle.dazzconv</ApplicationId>
         <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
@@ -23,7 +24,25 @@
         <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     </PropertyGroup>
 
-    <!-- App resources (иконки, шрифты и т.д.) -->
+    <!-- 🆕 ТОЛЬКО ДЛЯ RELEASE: unpackaged режим для Velopack -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <WindowsPackageType>None</WindowsPackageType>
+        <GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>
+    </PropertyGroup>
+
+    <!-- 🆕 ДЛЯ DEBUG: packaged режим (нужен для F5 в Visual Studio) -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+        <!-- НЕ ставим WindowsPackageType=None! VS нужен package для отладки -->
+        <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+      <ApplicationDisplayVersion>1.1.0</ApplicationDisplayVersion>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+      <ApplicationDisplayVersion>1.1.0</ApplicationDisplayVersion>
+    </PropertyGroup>
+
+    <!-- App resources -->
     <ItemGroup>
         <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
         <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
@@ -32,8 +51,6 @@
         <MauiFont Include="Resources\Fonts\*" />
         <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
-
-    <!-- ❌ БЛОК С MauiXaml Include УДАЛЁН — MAUI SDK подхватит XAML автоматически -->
 
     <!-- NuGet packages -->
     <ItemGroup>

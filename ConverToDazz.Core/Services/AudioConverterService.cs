@@ -60,5 +60,14 @@ namespace ConverToDazz.Core.Services
             await process.WaitForExitAsync(token);
             progress?.Report(100);
         }
+
+        public string[] SupportedExtensions => new[]
+{
+            "jpg", "jpeg", "png", "gif", "webp", "avif", "heic", "heif",
+            "bmp", "tiff", "tif", "pnm", "pbm", "pgm", "ppm", "psd",
+            "tga", "dds", "pcx", "sgi", "rgb",
+            "dpx", "exr", "hdr", "cin",
+            "ico", "jxl", "qoi", "ff"
+        };
     }
 }
