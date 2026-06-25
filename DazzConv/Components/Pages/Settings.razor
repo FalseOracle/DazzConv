@@ -690,6 +690,10 @@
 
         try
         {
+            Logger.LogInfo($"=== Проверка обновлений ===");
+            Logger.LogInfo($"Путь приложения: {Environment.ProcessPath}");
+            Logger.LogInfo($"Текущая версия (UI): {UpdateService.CurrentVersion}");
+
             var update = await UpdateService.CheckForUpdateAsync();
 
             if (update != null)
@@ -697,6 +701,12 @@
                 _pendingUpdate = update;
                 _latestVersion = update.TargetFullRelease.Version.ToString();
                 _updateAvailable = true;
+                Logger.LogInfo($"Доступно обновление: {_latestVersion}");
+            }
+            else
+            {
+                Logger.LogInfo("Обновлений не найдено");
+                _statusMessage = "Обновлений не найдено. Если вы уверены, что новая версия есть — проверьте, установлено ли приложение через установщик.";
             }
         }
         catch (Exception ex)

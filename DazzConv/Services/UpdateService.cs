@@ -18,15 +18,19 @@ public class UpdateService
     {
         try
         {
-            var source = new GithubSource(
-                repoUrl: RepoUrl,
-                accessToken: null,
-                prerelease: false,
-                downloader: null);
-
+            var source = new GithubSource(RepoUrl, accessToken: null, prerelease: false, downloader: null);
             var mgr = new UpdateManager(source);
-            var update = await mgr.CheckForUpdatesAsync();
 
+            if (!mgr.IsInstalled)
+            {
+                _logger.LogWarning("Приложение не установлено через Velopack. Обновления недоступны.");
+                _logger.LogWarning($"Путь запуска: {Environment.ProcessPath}");
+                return null;
+            }
+
+            _logger.LogInfo($"Velopack: приложение установлено, текущая версия: {mgr.CurrentVersion}");
+
+            var update = await mgr.CheckForUpdatesAsync();
             if (update != null)
             {
                 _logger.LogInfo($"Найдена новая версия: {update.TargetFullRelease.Version}");
@@ -37,9 +41,8 @@ public class UpdateService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning($"Ошибка проверки обновлений: {ex.Message}");
+            _logger.LogError($"Ошибка проверки обновлений: {ex.Message}", ex);
         }
-
         return null;
     }
 
