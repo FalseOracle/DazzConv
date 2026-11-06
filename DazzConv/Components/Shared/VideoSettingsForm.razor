@@ -1,0 +1,568 @@
+﻿@using ConverToDazz.Core.Services
+@using DazzConv.Services
+@inject FFmpegPathService FFmpegPaths
+
+@* ═══════════════════════════════════════════════════════════════════════════════════
+   ОБЩАЯ ФОРМА НАСТРОЕК ВИДЕО. Используется на странице «Видео» и в «Пакетной конвертации».
+   Все списки (форматы, кодеки, ограничения) берутся из FormatCatalog, а значения хранятся в VideoSettings.
+   Рендерит колонки Bootstrap — родитель должен обернуть её в <div class="row">.
+   ═══════════════════════════════════════════════════════════════════════════════════ *@
+
+<style>
+    .preset-menu { position: relative;
+    }
+
+    .preset-backdrop { position: fixed; inset: 0; z-index: 998;
+    }
+
+    .preset-dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 999;
+        min-width: 360px;
+        max-width: 92vw;
+        max-height: 70vh;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.18);
+        padding: 6px;
+    }
+
+    .preset-dropdown-hint { font-size: .8rem; color: #6c757d; padding: 4px 10px 6px;
+    }
+
+    body.dark-theme .preset-dropdown { background: #2b2b3d; border-color: #3a3a5a;
+    }
+
+    body.dark-theme .preset-dropdown-hint { color: #9aa0b5;
+    }
+
+    .preset-tips {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 0;
+    }
+
+    .preset-tip-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.875rem 1.25rem;
+        border-right: 1px solid #f0f0f0;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .preset-tip-item:hover {
+            background: rgba(13, 202, 240, 0.05);
+            transform: translateX(4px);
+    }
+
+    body.dark-theme .preset-tip-item {
+        border-color: #2a2a3e;
+    }
+
+    body.dark-theme .preset-tip-item:hover {
+            background: rgba(13, 202, 240, 0.1);
+    }
+
+    .preset-tip-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .preset-tip-icon.web {
+            background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+    }
+
+    .preset-tip-icon.quality {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    }
+
+    .preset-tip-icon.fast {
+            background: linear-gradient(135deg, #fd7e14 0%, #dc3545 100%);
+    }
+
+    .preset-tip-icon.mobile {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    }
+
+    .preset-tip-icon.nvenc {
+            background: linear-gradient(135deg, #76b900 0%, #00d2ff 100%);
+    }
+
+    .preset-tip-icon.meme {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    }
+
+    .preset-tip-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .preset-tip-name {
+        font-weight: 600;
+        margin-bottom: 0.125rem;
+    }
+
+    body.dark-theme .preset-tip-name {
+        color: #fff;
+    }
+
+    .preset-tip-desc {
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    body.dark-theme .preset-tip-desc {
+        color: #aaa;
+    }
+
+    /* Кастомный слайдер под дизайн */
+    .bitrate-slider-wrapper {
+        position: relative;
+        padding: 15px 10px 30px 10px;
+        background: #1e2333;
+        border-radius: 12px;
+    }
+
+    .custom-bitrate-range {
+        width: 100%;
+        height: 6px;
+        background: #444c66;
+        border-radius: 9999px;
+        outline: none;
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .custom-bitrate-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            background: #0dcaf0;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #0dcaf0, 0 0 25px rgba(13, 202, 240, 0.6);
+            cursor: pointer;
+            margin-top: -8px;
+    }
+
+    .custom-bitrate-range::-moz-range-thumb {
+            width: 22px;
+            height: 22px;
+            background: #0dcaf0;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #0dcaf0, 0 0 25px rgba(13, 202, 240, 0.6);
+            cursor: pointer;
+    }
+
+    .slider-ticks {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+        padding: 0 4px;
+        font-size: 0.82rem;
+        color: #8a94b0;
+        user-select: none;
+    }
+</style>
+
+@if (ShowPresets)
+{
+    <div class="col-md-12 mb-4">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">⚡ Быстрые настройки</h5>
+                @if (!string.IsNullOrEmpty(Settings.ActivePresetName))
+                {
+                    <span class="badge bg-light text-dark">Выбрано: @Settings.ActivePresetName</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (_openGroup != null)
+                {
+                    <div class="preset-backdrop" @onclick="() => _openGroup = null"></div>
+                }
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var group in VideoSettings.PresetGroups)
+                    {
+                        var isOpen = _openGroup == group.Key;
+                        <div class="preset-menu">
+                            <button type="button" class="btn @(isOpen ? "btn-info text-white" : "btn-outline-info")"
+                                    @onclick="() => _openGroup = isOpen ? null : group.Key">
+                                @group.Icon @group.Title
+                                <i class="bi bi-chevron-@(isOpen ? "up" : "down") ms-1"></i>
+                            </button>
+
+                            @if (isOpen)
+                            {
+                                <div class="preset-dropdown">
+                                    <div class="preset-dropdown-hint">@group.Hint</div>
+                                    @foreach (var item in group.Items.Where(i => i.Key != "nvenc" || NvidiaAvailable))
+                                    {
+                                        <div class="preset-tip-item" @onclick="() => ChoosePresetAsync(item)">
+                                            <div class="preset-tip-icon @item.IconClass"><i class="bi @item.Icon"></i></div>
+                                            <div class="preset-tip-info">
+                                                <div class="preset-tip-name">
+                                                    @item.Name
+                                                    @if (!string.IsNullOrEmpty(item.Badge))
+                                                    {
+                                                        <span class="badge bg-secondary ms-1">@item.Badge</span>
+                                                    }
+                                                </div>
+                                                <div class="preset-tip-desc">@item.Desc</div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="form-text mt-2">Пресет только заполняет настройки ниже — их можно менять вручную.</div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Основные настройки -->
+<div class="col-md-6 mb-4">
+    <div class="card h-100 border-primary">
+        <div class="card-header bg-primary text-white"><h5 class="mb-0">🎬 Видео настройки</h5></div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Выходной формат</label>
+                <select class="form-select" value="@Settings.OutputFormat" @onchange="OnFormatChangedAsync">
+                    @foreach (var grp in FormatCatalog.VideoContainers.GroupBy(c => c.Group))
+                    {
+                        <optgroup label="@grp.Key">
+                            @foreach (var c in grp)
+                            {
+                                var usable = IsContainerUsable(c.Ext);
+                                <option value="@c.Ext" disabled="@(!usable)">@c.Name — @c.Description@(usable ? "" : " (недоступно в вашей сборке ffmpeg)")</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+                @if (!string.IsNullOrEmpty(_container?.Note))
+                {
+                    <div class="form-text">@_container!.Note</div>
+                }
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Видео кодек</label>
+                <select class="form-select" value="@Settings.VideoCodec" @onchange="OnCodecChangedAsync" disabled="@Settings.IsGif">
+                    @foreach (var c in AllowedVideoCodecs())
+                    {
+                        <option value="@c.Id">@c.Name — @c.Hint</option>
+                    }
+                </select>
+                <div class="form-text">Показаны только кодеки, которые поддерживает выбранный формат.</div>
+            </div>
+
+            @if (Settings.HasPresets)
+            {
+                <div class="mb-3">
+                    <label class="form-label">
+                        Preset (скорость кодирования)
+                        <span class="text-muted small ms-2">@VideoSettings.PresetDescription(Settings.Preset)</span>
+                    </label>
+                    <select class="form-select" value="@Settings.Preset" @onchange="OnPresetChangedAsync" disabled="@Settings.IsGif">
+                        @if (Settings.VideoCodec.Contains("nvenc", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <option value="fast">Fast (быстро)</option>
+                            <option value="medium">Medium (баланс)</option>
+                            <option value="slow">Slow (медленно, лучше качество)</option>
+                        }
+                        else
+                        {
+                            <option value="ultrafast">Ultrafast (очень быстро)</option>
+                            <option value="superfast">Superfast</option>
+                            <option value="veryfast">Veryfast</option>
+                            <option value="faster">Faster</option>
+                            <option value="fast">Fast</option>
+                            <option value="medium">Medium (баланс)</option>
+                            <option value="slow">Slow</option>
+                            <option value="slower">Slower</option>
+                            <option value="veryslow">Veryslow (лучшее качество)</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label">Разрешение</label>
+                <input type="text" class="form-control" value="@Settings.Scale" @onchange="OnScaleChangedAsync"
+                       placeholder="Оставьте пустым для оригинала" />
+                <div class="form-text">Примеры: 1920x1080, 1280x720, 640x480, 320x240 или 640:-1 (по ширине)</div>
+            </div>
+
+            <div class="mb-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="@(IdPrefix)Fps" checked="@Settings.UseCustomFps" disabled="@Settings.IsGif"
+                           @onchange="e => SetAsync(() => Settings.UseCustomFps = (bool)(e.Value ?? false))" />
+                    <label class="form-check-label" for="@(IdPrefix)Fps">Изменить FPS @(Settings.IsGif ? "(15 fps для GIF)" : "")</label>
+                </div>
+                @if (Settings.UseCustomFps)
+                {
+                    <div class="input-group">
+                        <input type="number" class="form-control @(Settings.IsValidFps ? "" : "is-invalid")"
+                               value="@Settings.CustomFps" min="1" max="240" step="1" disabled="@Settings.IsGif"
+                               @onchange="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var f)) Settings.CustomFps = f; })" />
+                        <span class="input-group-text">fps</span>
+                        @if (!Settings.IsValidFps)
+                        {
+                            <div class="invalid-feedback">FPS: 1-240</div>
+                        }
+                    </div>
+                    @if (!Settings.IsGif)
+                    {
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            @foreach (var f in new[] { 10, 15, 24, 25, 30, 60, 120 })
+                            {
+                                var v = f;
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => SetAsync(() => Settings.CustomFps = v)">@v</button>
+                            }
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(SourceFps))
+                    {
+                        <div class="form-text">Оригинал: @SourceFps fps</div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Аудио и качество -->
+<div class="col-md-6 mb-4">
+    <div class="card h-100 border-success">
+        <div class="card-header bg-success text-white"><h5 class="mb-0">🎵 Аудио и качество</h5></div>
+        <div class="card-body">
+            @if (Settings.IsGif)
+            {
+                <div class="alert alert-info py-2 small d-flex align-items-center">
+                    <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                    <div>
+                        <strong>🎨 Режим GIF</strong><br />
+                        • Звук отключён • 15 fps • ширина 640 px • палитра 256 цветов
+                    </div>
+                </div>
+            }
+            else
+            {
+                @if (Settings.HasAudio)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Аудио кодек</label>
+                        <select class="form-select" value="@Settings.AudioCodec" @onchange="OnAudioCodecChangedAsync">
+                            @foreach (var a in AllowedAudioCodecs())
+                            {
+                                <option value="@a.Id">@a.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                @if (Settings.UsesCrf)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">
+                            CRF (качество): <strong>@Settings.Crf</strong>
+                            <span class="text-muted small ms-2">@VideoSettings.CrfDescription(Settings.Crf)</span>
+                        </label>
+                        <input type="range" class="form-range" min="0" max="@Settings.CrfMax" step="1" value="@Settings.Crf"
+                               @oninput="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.Crf = Math.Clamp(v, 0, Settings.CrfMax); })" />
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Без потерь (0)</span>
+                            <span class="text-muted">Стандарт (23)</span>
+                            <span class="text-muted">Худшее (@Settings.CrfMax)</span>
+                        </div>
+                    </div>
+                }
+
+                @if (Settings.UsesQScale)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">QScale (качество): <strong>@Settings.QScale</strong></label>
+                        <input type="range" class="form-range" min="1" max="31" step="1" value="@Settings.QScale"
+                               @oninput="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.QScale = Math.Clamp(v, 1, 31); })" />
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Лучшее (1)</span>
+                            <span class="text-muted">Худшее (31)</span>
+                        </div>
+                    </div>
+                }
+
+                @if (Settings.VideoCodec != "prores_ks")
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Видео битрейт (kbps)</label>
+                        <input type="number" class="form-control @(Settings.IsValidVideoBitrate ? "" : "is-invalid")"
+                               value="@Settings.VideoBitrate" min="0" placeholder="Оставьте пустым — качество по ползунку"
+                               @onchange="e => SetAsync(() => { var t = e.Value?.ToString(); Settings.VideoBitrate = string.IsNullOrWhiteSpace(t) ? null : (int.TryParse(t, out var b) && b > 0 ? b : null); })" />
+                        <div class="form-text">Альтернатива ползунку качества. Например: 3000, 5000, 8000. Для «шакала» — 50–300.</div>
+                    </div>
+                }
+
+                @if (Settings.HasAudio && Settings.AudioCodec != "copy" && (FormatCatalog.GetVideoAudioCodec(Settings.AudioCodec)?.Lossy ?? false))
+                {
+                    var (bmin, bmax) = AudioBitrateRange(Settings.AudioCodec);
+                    <div class="mb-4">
+                        <label class="form-label d-block text-center mb-2"><strong>Аудио битрейт: @Settings.AudioBitrate kbps</strong></label>
+                        <div class="bitrate-slider-wrapper">
+                            <input type="range" class="custom-bitrate-range" min="@bmin" max="@bmax" step="8" value="@Settings.AudioBitrate"
+                                   @oninput="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.AudioBitrate = Math.Clamp(v, bmin, bmax); })" />
+                            <div class="slider-ticks"><span>@bmin</span><span>@bmax</span></div>
+                        </div>
+                        @if (Settings.AudioCodec is "ac3" or "mp2")
+                        {
+                            <div class="form-text text-center">У этого кодека допустимы только фиксированные значения — берётся ближайшее.</div>
+                        }
+                    </div>
+                }
+
+                <!-- 📉 ШАКАЛ -->
+                <div class="border-top pt-3">
+                    <h6 class="mb-3">📉 Режим «шакал»</h6>
+
+                    @if (Settings.HasAudio && Settings.AudioCodec != "copy")
+                    {
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="@(IdPrefix)Mono" checked="@Settings.AudioMono"
+                                   @onchange="e => SetAsync(() => Settings.AudioMono = (bool)(e.Value ?? false))" />
+                            <label class="form-check-label" for="@(IdPrefix)Mono">Звук в моно</label>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Частота звука</label>
+                            <select class="form-select" value="@Settings.AudioSampleRate"
+                                    @onchange="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.AudioSampleRate = v; })">
+                                <option value="0">Оригинальная</option>
+                                @foreach (var r in FormatCatalog.SampleRatesForVideoAudio(Settings.AudioCodec))
+                                {
+                                    <option value="@r">@r Гц@(r == 8000 ? " (телефон)" : r == 22050 ? " (радио)" : "")</option>
+                                }
+                            </select>
+                        </div>
+                    }
+
+                    <div class="mb-1">
+                        <label class="form-label">Пикселизация картинки</label>
+                        <select class="form-select" value="@Settings.PixelateFactor"
+                                @onchange="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.PixelateFactor = v; })">
+                            <option value="0">Нет</option>
+                            <option value="2">Лёгкая (×2)</option>
+                            <option value="4">Средняя (×4)</option>
+                            <option value="6">Сильная (×6)</option>
+                            <option value="8">Максимальная (×8)</option>
+                        </select>
+                        <div class="form-text">Картинка уменьшается и растягивается обратно — размер кадра остаётся прежним, но выглядит «шакально».</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public VideoSettings Settings { get; set; } = new();
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<string> OnPresetApplied { get; set; }
+    [Parameter] public bool NvidiaAvailable { get; set; }
+    [Parameter] public string? SourceFps { get; set; }
+    [Parameter] public bool ShowPresets { get; set; } = true;
+    /// <summary>Уникальный префикс id элементов (если на странице несколько форм).</summary>
+    [Parameter] public string IdPrefix { get; set; } = "vsf";
+
+    private FfmpegCapabilities? _caps;
+    private HashSet<string> _broken = new(StringComparer.OrdinalIgnoreCase);
+    private string? _openGroup;
+
+    private VideoContainerInfo? _container => FormatCatalog.GetVideoContainer(Settings.OutputFormat);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _caps = await FfmpegCapabilities.GetAsync(FFmpegPaths.GetFFmpegPath());
+            var last = FfmpegCapabilities.LoadLastResults();
+            if (last != null)
+                _broken = last.Where(r => r.Kind == "video" && !r.Ok).Select(r => r.Ext).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch { }
+    }
+
+    private bool IsContainerUsable(string ext) =>
+        (_caps?.IsVideoContainerUsable(ext) ?? true) && !_broken.Contains(ext);
+
+    private IEnumerable<VideoCodecInfo> AllowedVideoCodecs()
+    {
+        var c = _container;
+        var ids = c?.VideoCodecs ?? FormatCatalog.VideoCodecs.Select(x => x.Id).ToArray();
+        foreach (var id in ids)
+        {
+            var info = FormatCatalog.GetVideoCodec(id);
+            if (info == null) continue;
+            if (info.IsGpu && !NvidiaAvailable) continue;
+            if (!(_caps?.HasEncoder(id) ?? true) && id != Settings.VideoCodec) continue;
+            yield return info;
+        }
+    }
+
+    private IEnumerable<AudioCodecInfo> AllowedAudioCodecs()
+    {
+        var ids = _container?.AudioCodecs ?? FormatCatalog.VideoAudioCodecs.Select(x => x.Id).ToArray();
+        foreach (var id in ids)
+        {
+            var info = FormatCatalog.GetVideoAudioCodec(id);
+            if (info == null) continue;
+            if (!(_caps?.HasEncoder(id) ?? true) && id != Settings.AudioCodec) continue;
+            yield return info;
+        }
+    }
+
+    private static (int Min, int Max) AudioBitrateRange(string codec) => codec switch
+    {
+        "ac3" => (64, 640),
+        "mp2" => (32, 384),
+        "libvorbis" or "wmav2" => (32, 320),
+        "aac" => (16, 320),
+        _ => (8, 320)
+    };
+
+    private async Task SetAsync(Action change)
+    {
+        change();
+        await OnChanged.InvokeAsync();
+    }
+
+    private Task OnFormatChangedAsync(ChangeEventArgs e) => SetAsync(() => Settings.SetOutputFormat(e.Value?.ToString() ?? "mp4"));
+    private Task OnCodecChangedAsync(ChangeEventArgs e) => SetAsync(() => Settings.SetVideoCodec(e.Value?.ToString() ?? "libx264"));
+    private Task OnPresetChangedAsync(ChangeEventArgs e) => SetAsync(() => Settings.Preset = e.Value?.ToString() ?? "medium");
+    private Task OnScaleChangedAsync(ChangeEventArgs e) => SetAsync(() => Settings.Scale = e.Value?.ToString()?.Trim() ?? "");
+    private Task OnAudioCodecChangedAsync(ChangeEventArgs e) => SetAsync(() => Settings.AudioCodec = e.Value?.ToString() ?? "aac");
+
+    private async Task ChoosePresetAsync(VideoPresetItem item)
+    {
+        Settings.ApplyPreset(item.Key);
+        _openGroup = null;
+        await OnChanged.InvokeAsync();
+        await OnPresetApplied.InvokeAsync(item.Name);
+    }
+}

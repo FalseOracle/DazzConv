@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.JSInterop;
 
 namespace DazzConv.Services
 {
-    public class HotkeyService
+    public class HotkeyService : IDisposable
     {
         private readonly IJSRuntime _jsRuntime;
         private DotNetObjectReference<HotkeyService>? _dotNetRef;
@@ -23,53 +23,29 @@ namespace DazzConv.Services
 
         public async Task InitializeAsync()
         {
-            if (_dotNetRef == null)
-            {
-                _dotNetRef = DotNetObjectReference.Create(this);
-            }
+            _dotNetRef ??= DotNetObjectReference.Create(this);
             await _jsRuntime.InvokeVoidAsync("DazzConvHotkeys.init", _dotNetRef);
         }
 
-        [JSInvokable]
-        public async Task OnHotkeyOpen()
+        [JSInvokable] public Task OnHotkeyOpen() => Raise(OnOpenRequested);
+        [JSInvokable] public Task OnHotkeySave() => Raise(OnSaveRequested);
+        [JSInvokable] public Task OnHotkeyPaste() => Raise(OnPasteRequested);
+        [JSInvokable] public Task OnHotkeyPause() => Raise(OnPauseRequested);
+        [JSInvokable] public Task OnHotkeyCancel() => Raise(OnCancelRequested);
+        [JSInvokable] public Task OnHotkeyClear() => Raise(OnClearRequested);
+
+        // Раньше — 6 одинаковых методов с if + await. Поддержаны и несколько подписчиков.
+        private static async Task Raise(Func<Task>? handlers)
         {
-            if (OnOpenRequested != null)
-                await OnOpenRequested();
+            if (handlers == null) return;
+            foreach (Func<Task> h in handlers.GetInvocationList())
+                await h();
         }
 
-        [JSInvokable]
-        public async Task OnHotkeySave()
+        public void Dispose()
         {
-            if (OnSaveRequested != null)
-                await OnSaveRequested();
-        }
-
-        [JSInvokable]
-        public async Task OnHotkeyPaste()
-        {
-            if (OnPasteRequested != null)
-                await OnPasteRequested();
-        }
-
-        [JSInvokable]
-        public async Task OnHotkeyPause()
-        {
-            if (OnPauseRequested != null)
-                await OnPauseRequested();
-        }
-
-        [JSInvokable]
-        public async Task OnHotkeyCancel()
-        {
-            if (OnCancelRequested != null)
-                await OnCancelRequested();
-        }
-
-        [JSInvokable]
-        public async Task OnHotkeyClear()
-        {
-            if (OnClearRequested != null)
-                await OnClearRequested();
+            _dotNetRef?.Dispose();
+            _dotNetRef = null;
         }
     }
 }

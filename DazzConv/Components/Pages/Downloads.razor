@@ -9,6 +9,10 @@
 @inject IJSRuntime JSRuntime
 @inject LoggerService Logger
 @inject HotkeyService Hotkeys
+@using System.Text.RegularExpressions
+@using System.Text
+@using System.Globalization
+@implements IDisposable
 
 <h3>📥 Скачать видео и аудио</h3>
 
@@ -18,8 +22,6 @@
 </div>
 
 <style>
-
-    /* ===== 🌙 ТЁМНАЯ ТЕМА: Модальное окно деталей ===== */
     body.dark-theme .details-modal {
         background: #1e1e2e;
         color: #e0e0e0;
@@ -43,7 +45,6 @@
             color: #888;
         }
 
-    /* Таблица деталей */
     body.dark-theme .details-table {
         border-color: #3a3a5a;
         background: #252538;
@@ -77,7 +78,6 @@
                 color: #9bb8ff;
             }
 
-        /* Кнопки копирования */
         body.dark-theme .detail-value .btn-link {
             color: #7aa2f7;
         }
@@ -92,7 +92,6 @@
                 color: #fff;
             }
 
-    /* Футер */
     body.dark-theme .modal-footer .btn-secondary {
         background: #3a3a5a;
         border-color: #3a3a5a;
@@ -122,7 +121,6 @@
             color: #fff;
         }
 
-    /* Alert'ы внутри модалки */
     body.dark-theme .details-modal .alert-warning {
         background-color: #3d2f00 !important;
         border-color: #6b5400 !important;
@@ -147,12 +145,10 @@
             color: #ffaaaa !important;
         }
 
-    /* Modal backdrop в тёмной теме */
     body.dark-theme .modal-backdrop {
         background-color: rgba(0, 0, 0, 0.75);
     }
 
-    /* Scrollbar в модалке */
     body.dark-theme .details-modal ::-webkit-scrollbar {
         width: 8px;
     }
@@ -170,7 +166,6 @@
             background: #4a4a6a;
         }
 
-    /* 🆕 Стили модального окна деталей */
     .details-modal {
         border-radius: 16px;
         overflow: hidden;
@@ -240,24 +235,20 @@
             font-size: 0.9rem;
         }
 
-    /* Анимация появления */
     .modal.fade.show {
         animation: modalFadeIn 0.2s ease-out;
     }
 
     @@keyframes modalFadeIn {
-        from
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
 
-    {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     .status-cell {
@@ -285,8 +276,7 @@
             display: inline-flex;
         }
 
-    .row.g-3 .form-control,
-    .row.g-3 .btn {
+    .row.g-3 .form-control, .row.g-3 .btn {
         height: calc(2.5rem + 2px);
     }
 
@@ -297,6 +287,23 @@
     .btn-group .btn {
         margin: 0 2px;
     }
+
+    body.dark-theme .btn-outline-primary {
+        color: #7aa2f7;
+        border-color: #4a5a8a;
+    }
+
+        body.dark-theme .btn-outline-primary:hover:not(:disabled) {
+            background: rgba(122, 162, 247, 0.15);
+            color: #9bb8ff;
+            border-color: #7aa2f7;
+        }
+
+        body.dark-theme .btn-outline-primary:disabled {
+            color: #5a6a9a;
+            border-color: #3a3a5a;
+            opacity: 0.6;
+        }
 
     .progress-bar-animated {
         animation: progress-bar-stripes 1s linear infinite;
@@ -346,7 +353,6 @@
             color: #ffffff !important;
         }
 
-    /* Также исправляем другие alert'ы в тёмной теме */
     body.dark-theme .alert-info {
         background-color: #055160 !important;
         border-color: #087990 !important;
@@ -370,8 +376,19 @@
         border-color: #6c757d !important;
         color: #ffffff !important;
     }
-
 </style>
+
+@if (_toolsStatus != null && (!_toolsStatus.PotInstalled || _toolsStatus.YtDlpOld))
+{
+    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3">
+        <div>
+            <strong>YouTube может скачиваться в 360p.</strong>
+            @if (_toolsStatus.YtDlpOld) { <text> yt-dlp устарел.</text> }
+            @if (!_toolsStatus.PotInstalled) { <text> Не установлен поставщик PO-токенов.</text> }
+        </div>
+        <a class="btn btn-sm btn-warning flex-shrink-0" href="/settings">Открыть настройки</a>
+    </div>
+}
 
 <!-- Настройки -->
 <div class="card mb-4">
@@ -409,8 +426,9 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label class="form-label">Аудио формат:</label>
-                        <select class="form-select" @bind="AudioFormat">
+                        <select class="form-select" @bind="AudioFormat" @bind:after="SaveStateAsync">
                             <option value="mp3">MP3 (совместимый)</option>
+                            <option value="best">Оригинал (без перекодирования — честное качество)</option>
                             <option value="flac">FLAC (без потерь)</option>
                             <option value="aac">AAC (лучше MP3)</option>
                             <option value="ogg">OGG Vorbis</option>
@@ -423,7 +441,7 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label class="form-label">Битрейт: @AudioBitrate kbps</label>
-                        <select class="form-select" @bind="AudioBitrate">
+                        <select class="form-select" @bind="AudioBitrate" @bind:after="SaveStateAsync">
                             <option value="64">64 kbps (низкое)</option>
                             <option value="128">128 kbps (среднее)</option>
                             <option value="192">192 kbps (хорошее)</option>
@@ -432,7 +450,15 @@
                         </select>
                         @if (AudioFormat == "flac" || AudioFormat == "wav")
                         {
-                            <div class="form-text">Для FLAC/WAV битрейт не применяется (без потерь)</div>
+                            <div class="form-text">
+                                Для FLAC/WAV битрейт не применяется. <strong>Важно:</strong> если сайт отдаёт звук со сжатием
+                                (SoundCloud, YouTube, VK — обычно MP3/AAC/OPUS), FLAC/WAV качества не добавят: это «ненастоящий» lossless.
+                                После загрузки в деталях будет написано, что реально отдал сайт.
+                            </div>
+                        }
+                        else if (AudioFormat == "best")
+                        {
+                            <div class="form-text">Сохраняется исходный поток сайта как есть (без потери качества на перекодировке). Формат файла выберет сайт.</div>
                         }
                         else if (AudioFormat == "opus")
                         {
@@ -448,7 +474,7 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label class="form-label">Качество видео:</label>
-                        <select class="form-select" @bind="VideoQuality">
+                        <select class="form-select" @bind="VideoQuality" @bind:after="SaveStateAsync">
                             <option value="best">Лучшее</option>
                             <option value="2160">4K (2160p)</option>
                             <option value="1440">2K (1440p)</option>
@@ -462,7 +488,7 @@
                 <div class="col-md-6">
                     <div class="mb-3">
                         <label class="form-label">Видео формат (контейнер):</label>
-                        <select class="form-select" @bind="VideoContainer">
+                        <select class="form-select" @bind="VideoContainer" @bind:after="SaveStateAsync">
                             <option value="mkv">MKV (универсальный)</option>
                             <option value="mp4">MP4 (совместимый)</option>
                             <option value="webm">WebM (современный)</option>
@@ -544,8 +570,19 @@
 
         <div class="mb-3">
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" @bind="IsPlaylist" />
+                <input class="form-check-input" type="checkbox" @bind="IsPlaylist" @bind:after="SaveStateAsync" />
                 <label class="form-check-label">Это плейлист/альбом (скачать всё)</label>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Своё имя файла (необязательно):</label>
+            <input type="text" class="form-control" @bind="CustomFileName" @bind:event="oninput"
+                   disabled="@(IsPlaylist || IsDownloading)"
+                   placeholder="Пусто — имя возьмётся из видео" />
+            <div class="form-text">
+                Расширение добавится автоматически. Недопустимые символы заменятся на «_».
+                Для плейлистов не применяется — там можно переименовать каждый файл в истории.
             </div>
         </div>
 
@@ -649,6 +686,7 @@
         </div>
     </div>
 }
+
 <!-- 🆕 МОДАЛЬНОЕ ОКНО ДЕТАЛЕЙ ЗАГРУЗКИ -->
 @if (_showDetailsModal && _selectedItem != null)
 {
@@ -663,13 +701,11 @@
                     <button type="button" class="btn-close btn-close-white" @onclick="CloseDetailsModal"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- Заголовок -->
                     <div class="details-title mb-3">
                         <h6 class="fw-bold mb-1">@_selectedItem.Title</h6>
                         <small class="text-muted">ID: @(_selectedItem.GetHashCode().ToString("X8"))</small>
                     </div>
 
-                    <!-- Таблица деталей -->
                     <div class="details-table">
                         <div class="detail-row">
                             <div class="detail-label">
@@ -761,18 +797,28 @@
                                 </div>
                             }
 
+                            @if (!string.IsNullOrEmpty(_selectedItem.SourceInfo))
+                            {
+                                <div class="detail-row">
+                                    <div class="detail-label">
+                                        <i class="bi bi-soundwave text-info"></i> Качество звука
+                                    </div>
+                                    <div class="detail-value">@_selectedItem.SourceInfo</div>
+                                </div>
+                            }
+
                             <div class="detail-row">
                                 <div class="detail-label">
-                                    <i class="bi bi-check-circle text-success"></i> Файл существует
+                                    <i class="bi bi-check-circle text-success"></i> Файл на диске
                                 </div>
                                 <div class="detail-value">
                                     @if (File.Exists(_selectedItem.FilePath))
                                     {
-                                        <span class="badge bg-success">✅ Да</span>
+                                        <span class="badge bg-success">✅ Найден</span>
                                     }
                                     else
                                     {
-                                        <span class="badge bg-danger">❌ Нет</span>
+                                        <span class="badge bg-danger">❌ Не найден (перемещён или удалён)</span>
                                     }
                                 </div>
                             </div>
@@ -808,10 +854,74 @@
     </div>
 }
 
-<!-- ✅ ИСТОРИЯ ЗАГРУЗОК (ВНЕ модального окна!) -->
+<!-- 🆕 МОДАЛЬНОЕ ОКНО КОНСОЛИ YT-DLP -->
+@if (_showConsoleModal && _consoleLogItem != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content details-modal">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-terminal me-2"></i>Консоль yt-dlp: @_consoleLogItem.Title
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseConsoleModal"></button>
+                </div>
+                <div class="modal-body bg-black text-success" style="font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85rem; max-height: 70vh; overflow-y: auto; padding: 1.5rem;">
+                    <pre style="white-space: pre-wrap; word-break: break-all; margin: 0; color: #00ff00;">@_consoleLogItem.ConsoleLog</pre>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="() => CopyToClipboard(_consoleLogItem.ConsoleLog)">
+                        <i class="bi bi-clipboard me-1"></i> Копировать лог
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CloseConsoleModal">
+                        <i class="bi bi-x-lg me-1"></i> Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- МОДАЛЬНОЕ ОКНО ПЕРЕИМЕНОВАНИЯ -->
+@if (_showRenameModal && _renameItem != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content details-modal">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Переименовать файл</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseRenameModal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Новое имя (без расширения):</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" @bind="_renameValue" @bind:event="oninput"
+                               @onkeydown="OnRenameKeyDown" autofocus />
+                        <span class="input-group-text">@Path.GetExtension(_renameItem.FilePath)</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_renameError))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0 py-2">@_renameError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="ConfirmRename">
+                        <i class="bi bi-check-lg me-1"></i> Переименовать
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CloseRenameModal">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ✅ ИСТОРИЯ ЗАГРУЗОК -->
+@{ var historyItems = GetSortedHistory(); }
 <div class="card mt-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">📋 История загрузок (@Downloader.DownloadHistory.Count)</h5>
+        <h5 class="mb-0">📋 История загрузок (@historyItems.Count)</h5>
         <div class="d-flex gap-2">
             <button class="btn btn-sm btn-outline-warning" @onclick="ClearCache" title="Удалить временные файлы yt-dlp">
                 <i class="bi bi-trash3"></i> Очистить кэш (@CacheSize)
@@ -822,7 +932,7 @@
         </div>
     </div>
     <div class="card-body">
-        @if (Downloader.DownloadHistory.Any())
+        @if (historyItems.Any())
         {
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -836,7 +946,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in Downloader.DownloadHistory.OrderByDescending(i => i.AddedTime))
+                        @foreach (var item in historyItems)
                         {
                             <tr>
                                 <td>
@@ -900,7 +1010,7 @@
                                     <div class="btn-group" role="group">
                                         @if (!string.IsNullOrEmpty(item.FilePath))
                                         {
-                                            var pathExists = File.Exists(item.FilePath);
+                                            var pathExists = FileExistsCached(item.FilePath);
                                             <button class="btn btn-sm @(pathExists ? "btn-outline-success" : "btn-outline-warning")"
                                                     @onclick="() => OpenFile(item.FilePath)"
                                                     title="@(pathExists ? "Открыть папку с выделенным файлом" : "Открыть папку (файл не найден)")">
@@ -915,6 +1025,20 @@
                                                 <i class="bi bi-folder2-open"></i>
                                             </button>
                                         }
+
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => OpenRenameModal(item)"
+                                                disabled="@(!FileExistsCached(item.FilePath))"
+                                                title="Переименовать файл">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <button class="btn btn-sm btn-outline-info"
+                                                @onclick="() => ShowConsoleLog(item)"
+                                                title="Открыть консоль (лог yt-dlp)">
+                                            <i class="bi bi-terminal"></i>
+                                        </button>
+
                                         <button class="btn btn-sm btn-outline-info"
                                                 @onclick="() => ShowStatusDetails(item)"
                                                 title="Показать детали">
@@ -941,6 +1065,8 @@
 </div>
 
 @code {
+    private YtDlpToolsService Tools => YtDlpToolsService.Instance;
+
     private string UrlInput = "";
     private string DownloadPath = "";
     private string DownloadType = "video";
@@ -961,6 +1087,228 @@
     private string _blockedSiteWarning = "";
     private bool _showDetailsModal = false;
     private DownloadItem? _selectedItem = null;
+    private bool _showConsoleModal = false;
+    private DownloadItem? _consoleLogItem = null;
+
+    private string CustomFileName = "";
+    private bool _disposed;
+    private static readonly Regex ProgressRegex = new(@"\[download\]\s+(\d+(?:\.\d+)?)%", RegexOptions.Compiled);
+
+    public void Dispose() => _disposed = true;
+
+    // ───────── кэш File.Exists: раньше вызывался для каждой строки истории на каждый рендер ─────────
+    private readonly Dictionary<string, (bool Exists, DateTime At)> _existsCache = new();
+
+    private bool FileExistsCached(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        var now = DateTime.UtcNow;
+        if (_existsCache.TryGetValue(path, out var e) && (now - e.At).TotalSeconds < 10)
+            return e.Exists;
+        var exists = File.Exists(path);
+        _existsCache[path] = (exists, now);
+        return exists;
+    }
+
+    // ───────── история загрузок ─────────
+    // История хранится в YtDlpService (download_history.json). Раньше новые загрузки в неё не попадали,
+    // потому что сервис добавлял запись только когда страница НЕ передавала свой объект — исправлено в сервисе.
+    private List<DownloadItem> GetSortedHistory() =>
+        Downloader.DownloadHistory.OrderByDescending(i => i.AddedTime).ToList();
+
+    /// <summary>Обновляет путь/название записи после переименования файла.</summary>
+    private void ApplyPathChange(string oldPath, string newPath, string newTitle)
+    {
+        foreach (var item in Downloader.DownloadHistory.Where(i =>
+                     string.Equals(i.FilePath, oldPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            item.FilePath = newPath;
+            item.Title = newTitle;
+        }
+        _existsCache.Clear();
+        Downloader.SaveHistory();
+    }
+
+    private YtDlpToolsStatus? _toolsStatus;
+
+    private async Task RefreshToolsStatusAsync()
+    {
+        try
+        {
+            _toolsStatus = await Tools.GetStatusAsync(checkLatest: false);
+            if (_toolsStatus.PotInstalled && !_toolsStatus.PotRunning)
+            {
+                await Tools.EnsurePotServerAsync();
+                _toolsStatus = await Tools.GetStatusAsync(checkLatest: false);
+            }
+        }
+        catch (Exception ex) { Logger.LogWarning($"Downloads: статус загрузчика: {ex.Message}"); }
+        if (!_disposed) await InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplyProxy()
+    {
+        if (UseProxy && !string.IsNullOrWhiteSpace(ProxyAddress))
+            Downloader.SetProxy(FormatProxyUrl(ProxyAddress));
+        else
+            Downloader.SetProxy(null);
+    }
+
+    // ───────── очистка URL ─────────
+    private static string CleanUrl(string input, bool keepPlaylist)
+    {
+        var url = input.Trim();
+        try
+        {
+            if (url.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase))
+            {
+                var q = url.IndexOf('?');
+                return q > 0 ? url[..q] : url;   // всё после ? — трекинг
+            }
+
+            if (url.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+            {
+                var q = url.IndexOf('?');
+                if (q <= 0) return url;
+                var t = System.Web.HttpUtility.ParseQueryString(new Uri(url).Query)["t"];
+                return string.IsNullOrEmpty(t) ? url[..q] : $"{url[..q]}?t={t}";
+            }
+
+            if (url.Contains("youtube.com", StringComparison.OrdinalIgnoreCase))
+            {
+                var uri = new Uri(url);
+                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                var videoId = query["v"];
+                if (string.IsNullOrEmpty(videoId)) return url;
+
+                var parts = new List<string> { $"v={videoId}" };
+                var listId = query["list"];
+                if (keepPlaylist && !string.IsNullOrEmpty(listId)) parts.Add($"list={listId}");
+                var ts = query["t"];
+                if (!string.IsNullOrEmpty(ts)) parts.Add($"t={ts}");
+                return $"{uri.Scheme}://{uri.Host}{uri.AbsolutePath}?{string.Join("&", parts)}";
+            }
+        }
+        catch { /* парсинг не удался — оставляем как есть */ }
+        return url;
+    }
+
+    // ───────── переименование ─────────
+    private bool _showRenameModal;
+    private DownloadItem? _renameItem;
+    private string _renameValue = "";
+    private string _renameError = "";
+
+    private static readonly string[] ReservedNames =
+        { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+          "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" };
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(name.Length);
+        foreach (var c in name.Trim())
+            sb.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
+
+        var result = sb.ToString().Trim().TrimEnd('.', ' ');
+        if (result.Length > 180) result = result[..180].TrimEnd();
+        if (ReservedNames.Contains(result, StringComparer.OrdinalIgnoreCase)) result = "_" + result;
+        return result;
+    }
+
+    /// <summary>Переименовывает файл, сохраняя расширение. Возвращает новый полный путь.</summary>
+    private static string RenameFileOnDisk(string oldPath, string newBaseName)
+    {
+        var dir = Path.GetDirectoryName(oldPath) ?? throw new IOException("Не удалось определить папку файла");
+        var ext = Path.GetExtension(oldPath);
+
+        var safe = SanitizeFileName(newBaseName);
+        if (ext.Length > 0 && safe.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+            safe = safe[..^ext.Length].TrimEnd();   // пользователь сам ввёл расширение
+        if (safe.Length == 0) throw new ArgumentException("Имя файла не может быть пустым");
+
+        var newPath = Path.Combine(dir, safe + ext);
+
+        if (string.Equals(newPath, oldPath, StringComparison.Ordinal)) return oldPath;
+
+        if (string.Equals(newPath, oldPath, StringComparison.OrdinalIgnoreCase))
+        {
+            // смена только регистра: на NTFS прямой Move не сработает
+            var tmp = Path.Combine(dir, Guid.NewGuid().ToString("N") + ext);
+            File.Move(oldPath, tmp);
+            File.Move(tmp, newPath);
+            return newPath;
+        }
+
+        if (File.Exists(newPath))
+            throw new IOException($"Файл «{safe + ext}» уже существует в этой папке");
+
+        File.Move(oldPath, newPath);
+        return newPath;
+    }
+
+    private void OpenRenameModal(DownloadItem item)
+    {
+        if (string.IsNullOrEmpty(item.FilePath)) return;
+        _renameItem = item;
+        _renameValue = Path.GetFileNameWithoutExtension(item.FilePath);
+        _renameError = "";
+        _showRenameModal = true;
+    }
+
+    private void CloseRenameModal()
+    {
+        _showRenameModal = false;
+        _renameItem = null;
+        _renameError = "";
+    }
+
+    private async Task OnRenameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ConfirmRename();
+        else if (e.Key == "Escape") CloseRenameModal();
+    }
+
+    private async Task ConfirmRename()
+    {
+        if (_renameItem == null || string.IsNullOrEmpty(_renameItem.FilePath)) return;
+
+        try
+        {
+            if (!File.Exists(_renameItem.FilePath))
+                throw new FileNotFoundException("Файл не найден — возможно, он был перемещён или удалён");
+
+            var newPath = await Task.Run(() => RenameFileOnDisk(_renameItem.FilePath, _renameValue));
+
+            ApplyPathChange(_renameItem.FilePath, newPath, Path.GetFileNameWithoutExtension(newPath));
+            _renameItem.FilePath = newPath;
+            _renameItem.Title = Path.GetFileNameWithoutExtension(newPath);
+
+            Logger.LogInfo($"Downloads: файл переименован → {newPath}");
+            CloseRenameModal();
+            await ShowToast($"✅ Переименовано: {Path.GetFileName(newPath)}", ToastType.Success);
+        }
+        catch (Exception ex)
+        {
+            _renameError = ex is IOException || ex is ArgumentException || ex is FileNotFoundException
+                ? ex.Message
+                : $"Ошибка: {ex.Message}";
+        }
+    }
+
+    private void ShowConsoleLog(DownloadItem item)
+    {
+        _consoleLogItem = item;
+        _showConsoleModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseConsoleModal()
+    {
+        _showConsoleModal = false;
+        _consoleLogItem = null;
+        StateHasChanged();
+    }
 
     private void ShowStatusDetails(DownloadItem item)
     {
@@ -992,53 +1340,36 @@
         }
     }
 
-
-
-    // ===== СПИСОК ЗАПРЕЩЁННЫХ САЙТОВ (DRM-защита) =====
     private static readonly Dictionary<string, string> BlockedSites = new(StringComparer.OrdinalIgnoreCase)
     {
-         // === МУЗЫКАЛЬНЫЕ СЕРВИСЫ С DRM ===
-    { "spotify.com", "Spotify использует DRM-защиту и не может быть скачан" },
-    { "deezer.com", "Deezer использует DRM-защиту" },
-    { "tidal.com", "Tidal использует DRM-защиту" },
-    { "music.yandex.ru", "Яндекс.Музыка использует DRM-защиту" },
-    { "music.youtube.com", "YouTube Music защищён DRM" },
-    { "pandora.com", "Pandora использует DRM-защиту" },
-
-    // === ВИДЕОСТРИМИНГИ С DRM ===
-    { "netflix.com", "Netflix использует DRM-защиту" },
-    { "disneyplus.com", "Disney+ использует DRM-защиту" },
-    { "plus.disney.com", "Disney+ использует DRM-защиту" },
-    { "amazon.com", "Amazon Prime Video использует DRM-защиту" },
-    { "primevideo.com", "Amazon Prime Video использует DRM-защиту" },
-    { "hulu.com", "Hulu использует DRM-защиту" },
-    { "hbomax.com", "HBO Max использует DRM-защиту" },
-    { "max.com", "Max (HBO) использует DRM-защиту" },
-    { "peacocktv.com", "Peacock использует DRM-защиту" },
-    { "paramountplus.com", "Paramount+ использует DRM-защиту" },
-    { "appletv.com", "Apple TV+ использует DRM-защиту" },
-    { "tv.apple.com", "Apple TV+ использует DRM-защиту" },
-
-    // === РОССИЙСКИЕ СТРИМИНГИ С DRM ===
-    { "kion.ru", "KION использует DRM-защиту" },
-    { "more.tv", "More.tv использует DRM-защиту" },
-    { "start.ru", "Start использует DRM-защиту" },
-    { "premier.one", "Premier использует DRM-защиту" },
-    { "wink.ru", "Wink использует DRM-защиту" },
-    { "ntvplus.ru", "НТВ+ использует DRM-защиту" },
-    { "okko.tv", "OKKO использует DRM-защиту" },
-
-        // Аниме с DRM
-        { "crunchyroll.com", "Crunchyroll использует DRM-защиту на части контента" },
-
-        // Другие
+        { "spotify.com", "Spotify использует DRM-защиту и не может быть скачан" },
+        { "deezer.com", "Deezer использует DRM-защиту" },
+        { "tidal.com", "Tidal использует DRM-защиту" },
+        { "music.yandex.ru", "Яндекс.Музыка использует DRM-защиту" },
+        { "music.youtube.com", "YouTube Music защищён DRM" },
         { "pandora.com", "Pandora использует DRM-защиту" },
-        { "soundcloud.com", "SoundCloud частично защищён DRM" },
+        { "netflix.com", "Netflix использует DRM-защиту" },
+        { "disneyplus.com", "Disney+ использует DRM-защиту" },
+        { "plus.disney.com", "Disney+ использует DRM-защиту" },
+        { "amazon.com", "Amazon Prime Video использует DRM-защиту" },
+        { "primevideo.com", "Amazon Prime Video использует DRM-защиту" },
+        { "hulu.com", "Hulu использует DRM-защиту" },
+        { "hbomax.com", "HBO Max использует DRM-защиту" },
+        { "max.com", "Max (HBO) использует DRM-защиту" },
+        { "peacocktv.com", "Peacock использует DRM-защиту" },
+        { "paramountplus.com", "Paramount+ использует DRM-защиту" },
+        { "appletv.com", "Apple TV+ использует DRM-защиту" },
+        { "tv.apple.com", "Apple TV+ использует DRM-защиту" },
+        { "kion.ru", "KION использует DRM-защиту" },
+        { "more.tv", "More.tv использует DRM-защиту" },
+        { "start.ru", "Start использует DRM-защиту" },
+        { "premier.one", "Premier использует DRM-защиту" },
+        { "wink.ru", "Wink использует DRM-защиту" },
+        { "ntvplus.ru", "НТВ+ использует DRM-защиту" },
+        { "okko.tv", "OKKO использует DRM-защиту" },
+        { "crunchyroll.com", "Crunchyroll использует DRM-защиту на части контента" },
     };
 
-
-
-    // Прокси настройки
     private bool UseProxy = false;
     private string ProxyAddress = "127.0.0.1:1080";
     private bool IsTestingProxy = false;
@@ -1054,18 +1385,20 @@
     protected override async Task OnInitializedAsync()
     {
         DownloadPath = Downloader.DownloadPath;
+
+        if (string.IsNullOrEmpty(Downloader.FFmpegPath))
+        {
+            await ShowToast("⚠️ FFmpeg не найден! Конвертация может не работать.", ToastType.Warning);
+        }
+        else
+        {
+            Logger.LogInfo($"[Downloads] FFmpeg найден: {Downloader.FFmpegPath}");
+        }
+
         await LoadProxySettingsAsync();
         await LoadStateAsync();
+        _ = RefreshToolsStatusAsync();
         await UpdateCacheSizeAsync();
-    }
-
-    private string GetFinalFilePath(string originalPath) => originalPath ?? "";
-
-    private string GetDisplayFileName(string filePath)
-    {
-        if (string.IsNullOrEmpty(filePath)) return "Неизвестный файл";
-        try { return Path.GetFileName(filePath); }
-        catch { return filePath; }
     }
 
     private string TruncateUrl(string url, int maxLength)
@@ -1075,7 +1408,6 @@
         return url.Substring(0, maxLength - 3) + "...";
     }
 
-    // ===== ПРОВЕРКА ЗАПРЕЩЁННЫХ САЙТОВ =====
     private bool IsUrlBlocked(string url, out string reason)
     {
         reason = "";
@@ -1086,7 +1418,6 @@
             var uri = new Uri(url.StartsWith("http") ? url : "https://" + url);
             var host = uri.Host.ToLowerInvariant();
 
-            // Убираем www.
             if (host.StartsWith("www."))
                 host = host.Substring(4);
 
@@ -1094,7 +1425,6 @@
             {
                 var blockedDomain = blocked.Key.ToLowerInvariant();
 
-                // Проверяем точное совпадение или поддомен
                 if (host == blockedDomain || host.EndsWith("." + blockedDomain))
                 {
                     reason = blocked.Value;
@@ -1174,141 +1504,71 @@
         }
     }
 
+    // ───────── кэш ─────────
+    // Раньше список папок/масок дублировался в ClearCache и UpdateCacheSizeAsync (~150 строк),
+    // а системный %TEMP% чистился по *.part/*.temp — это могло удалять чужие файлы.
+    private static readonly string[] DownloadTempPatterns = { "*.part", "*.ytdl", "*.part.tmp", "*.temp", "*.fvideo*", "*.faudio*" };
+
+    private static string[] SafeGetFiles(string folder, string pattern)
+    {
+        try { return Directory.Exists(folder) ? Directory.GetFiles(folder, pattern, SearchOption.TopDirectoryOnly) : Array.Empty<string>(); }
+        catch { return Array.Empty<string>(); }
+    }
+
+    private List<string> CollectCacheFiles()
+    {
+        var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var temp = Path.GetTempPath();
+
+        if (!string.IsNullOrEmpty(DownloadPath))
+            foreach (var pattern in DownloadTempPatterns)
+                foreach (var f in SafeGetFiles(DownloadPath, pattern)) files.Add(f);
+
+        var hourAgo = DateTime.Now.AddHours(-1);
+        foreach (var f in SafeGetFiles(temp, "magick-*"))
+        {
+            try { if (File.GetLastWriteTime(f) < hourAgo) files.Add(f); } catch { }
+        }
+
+        foreach (var sub in new[] { "DazzConv_Preview", "DazzConv_Batch" })
+            foreach (var f in SafeGetFiles(Path.Combine(temp, sub), "*")) files.Add(f);
+
+        return files.ToList();
+    }
+
     private async Task ClearCache()
     {
+        if (IsDownloading)
+        {
+            await ShowToast("⚠️ Дождитесь окончания загрузки — иначе удалятся её временные файлы", ToastType.Warning);
+            return;
+        }
+
         try
         {
-            var deletedCount = 0;
-            var deletedSize = 0L;
-
-            var foldersToClean = new List<string>
-        {
-            Path.GetTempPath(),
-            DownloadPath
-        };
-
-            var tempExtensions = new[] { ".part", ".ytdl", ".part.tmp", ".temp" };
-            var tempPatterns = new[] { "*.part", "*.ytdl", "*.part.tmp", "*.temp", "*.fvideo*", "*.faudio*" };
-
-            foreach (var folder in foldersToClean)
+            var (count, size) = await Task.Run(() =>
             {
-                if (!Directory.Exists(folder)) continue;
-
-                try
+                int c = 0; long sz = 0;
+                foreach (var file in CollectCacheFiles())
                 {
-                    // Удаляем файлы по расширениям
-                    foreach (var ext in tempExtensions)
+                    try
                     {
-                        foreach (var file in Directory.GetFiles(folder, "*" + ext, SearchOption.TopDirectoryOnly))
-                        {
-                            try
-                            {
-                                var fileInfo = new FileInfo(file);
-                                deletedSize += fileInfo.Length;
-                                fileInfo.Delete();
-                                deletedCount++;
-                            }
-                            catch { }
-                        }
+                        var fi = new FileInfo(file);
+                        var len = fi.Length;
+                        fi.Delete();
+                        sz += len; c++;
                     }
-
-                    // Удаляем файлы по паттернам
-                    foreach (var pattern in tempPatterns)
-                    {
-                        foreach (var file in Directory.GetFiles(folder, pattern, SearchOption.TopDirectoryOnly))
-                        {
-                            try
-                            {
-                                var fileInfo = new FileInfo(file);
-                                deletedSize += fileInfo.Length;
-                                fileInfo.Delete();
-                                deletedCount++;
-                            }
-                            catch { }
-                        }
-                    }
+                    catch { }
                 }
-                catch { }
-            }
-
-            // НОВОЕ: Чистим временные файлы ImageMagick
-            var tempPath = Path.GetTempPath();
-            if (Directory.Exists(tempPath))
-            {
-                try
-                {
-                    // ImageMagick создаёт файлы с префиксом "magick-"
-                    foreach (var file in Directory.GetFiles(tempPath, "magick-*", SearchOption.TopDirectoryOnly))
-                    {
-                        try
-                        {
-                            var fileInfo = new FileInfo(file);
-                            // Удаляем только файлы старше 1 часа (чтобы не мешать текущей работе)
-                            if (fileInfo.LastWriteTime < DateTime.Now.AddHours(-1))
-                            {
-                                deletedSize += fileInfo.Length;
-                                fileInfo.Delete();
-                                deletedCount++;
-                                Logger.LogInfo($"Кэш: удалён файл ImageMagick {file} ({FormatFileSize(fileInfo.Length)})");
-                            }
-                        }
-                        catch { }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning($"Кэш: ошибка очистки ImageMagick: {ex.Message}");
-                }
-            }
-
-            // Чистим DazzConv_Preview
-            var previewFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Preview");
-            if (Directory.Exists(previewFolder))
-            {
-                try
-                {
-                    foreach (var file in Directory.GetFiles(previewFolder))
-                    {
-                        try
-                        {
-                            var fileInfo = new FileInfo(file);
-                            deletedSize += fileInfo.Length;
-                            fileInfo.Delete();
-                            deletedCount++;
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-            }
-
-            // НОВОЕ: Чистим DazzConv_Batch (временные файлы пакетной конвертации)
-            var batchFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Batch");
-            if (Directory.Exists(batchFolder))
-            {
-                try
-                {
-                    foreach (var file in Directory.GetFiles(batchFolder))
-                    {
-                        try
-                        {
-                            var fileInfo = new FileInfo(file);
-                            deletedSize += fileInfo.Length;
-                            fileInfo.Delete();
-                            deletedCount++;
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-            }
+                return (c, sz);
+            });
 
             await UpdateCacheSizeAsync();
 
-            if (deletedCount > 0)
+            if (count > 0)
             {
-                Logger.LogInfo($"Кэш: удалено {deletedCount} файлов, освобождено {FormatFileSize(deletedSize)}");
-                await ShowToast($"✅ Удалено {deletedCount} временных файлов\nОсвобождено: {FormatFileSize(deletedSize)}", ToastType.Success);
+                Logger.LogInfo($"Кэш: удалено {count} файлов, освобождено {FormatFileSize(size)}");
+                await ShowToast($"✅ Удалено {count} временных файлов\nОсвобождено: {FormatFileSize(size)}", ToastType.Success);
             }
             else
             {
@@ -1326,87 +1586,65 @@
     {
         try
         {
-            var totalSize = 0L;
-            var tempExtensions = new[] { ".part", ".ytdl", ".part.tmp", ".temp" };
-
-            if (!string.IsNullOrEmpty(DownloadPath) && Directory.Exists(DownloadPath))
+            // Файловые операции — вне UI-потока
+            var total = await Task.Run(() => CollectCacheFiles().Sum(f =>
             {
-                foreach (var ext in tempExtensions)
-                {
-                    foreach (var file in Directory.GetFiles(DownloadPath, "*" + ext, SearchOption.TopDirectoryOnly))
-                    {
-                        try { totalSize += new FileInfo(file).Length; } catch { }
-                    }
-                }
-            }
-
-            var tempPath = Path.GetTempPath();
-            if (Directory.Exists(tempPath))
-            {
-                // Временные файлы yt-dlp
-                foreach (var ext in tempExtensions)
-                {
-                    foreach (var file in Directory.GetFiles(tempPath, "*" + ext, SearchOption.TopDirectoryOnly))
-                    {
-                        try { totalSize += new FileInfo(file).Length; } catch { }
-                    }
-                }
-
-                // НОВОЕ: Файлы ImageMagick
-                foreach (var file in Directory.GetFiles(tempPath, "magick-*", SearchOption.TopDirectoryOnly))
-                {
-                    try { totalSize += new FileInfo(file).Length; } catch { }
-                }
-            }
-
-            // DazzConv_Preview
-            var previewFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Preview");
-            if (Directory.Exists(previewFolder))
-            {
-                foreach (var file in Directory.GetFiles(previewFolder))
-                {
-                    try { totalSize += new FileInfo(file).Length; } catch { }
-                }
-            }
-
-            // НОВОЕ: DazzConv_Batch
-            var batchFolder = Path.Combine(Path.GetTempPath(), "DazzConv_Batch");
-            if (Directory.Exists(batchFolder))
-            {
-                foreach (var file in Directory.GetFiles(batchFolder))
-                {
-                    try { totalSize += new FileInfo(file).Length; } catch { }
-                }
-            }
-
-            CacheSize = FormatFileSize(totalSize);
-            await InvokeAsync(StateHasChanged);
+                try { return new FileInfo(f).Length; } catch { return 0L; }
+            }));
+            CacheSize = FormatFileSize(total);
         }
         catch
         {
             CacheSize = "0 Б";
         }
+        if (!_disposed) await InvokeAsync(StateHasChanged);
     }
 
     private async Task OnProxyAddressChanged() => await SaveProxySettingsAsync();
 
     private async Task LoadProxySettingsAsync()
     {
+        var settingsPath = GetProxySettingsPath();
+        ProxySettings? settings = null;
+
         try
         {
-            var json = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dazzconv_proxy_settings");
-            if (!string.IsNullOrEmpty(json))
+            if (File.Exists(settingsPath))
             {
-                var settings = System.Text.Json.JsonSerializer.Deserialize<ProxySettings>(json);
-                if (settings != null)
-                {
-                    UseProxy = settings.UseProxy;
-                    ProxyAddress = settings.ProxyAddress ?? "127.0.0.1:1080";
-                }
+                var json = await File.ReadAllTextAsync(settingsPath);
+                settings = System.Text.Json.JsonSerializer.Deserialize<ProxySettings>(json);
+                Logger.LogInfo($"[Proxy] Загружено из файла: UseProxy={settings?.UseProxy}, Address={settings?.ProxyAddress}");
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Logger.LogInfo($"[Proxy] Ошибка чтения файла: {ex.Message}");
+        }
+
+        if (settings == null)
+        {
+            try
+            {
+                var json = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dazzconv_proxy_settings");
+                if (!string.IsNullOrEmpty(json))
+                {
+                    settings = System.Text.Json.JsonSerializer.Deserialize<ProxySettings>(json);
+                    Logger.LogInfo($"[Proxy] Загружено из localStorage: UseProxy={settings?.UseProxy}, Address={settings?.ProxyAddress}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogInfo($"[Proxy] Ошибка чтения localStorage: {ex.Message}");
+            }
+        }
+
+        if (settings != null)
+        {
+            UseProxy = settings.UseProxy;
+            ProxyAddress = settings.ProxyAddress ?? "127.0.0.1:1080";
+        }
     }
+
 
     private class ProxySettings
     {
@@ -1414,16 +1652,48 @@
         public string? ProxyAddress { get; set; }
     }
 
+    private string GetProxySettingsPath()
+    {
+        var appDataPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "DazzConv");
+        if (!Directory.Exists(appDataPath))
+            Directory.CreateDirectory(appDataPath);
+        return Path.Combine(appDataPath, "proxy_settings.json");
+    }
+
     private async Task SaveProxySettingsAsync()
     {
+        var settings = new ProxySettings { UseProxy = UseProxy, ProxyAddress = ProxyAddress };
+        var json = System.Text.Json.JsonSerializer.Serialize(settings);
+
+        // 1. Сохраняем в файл (надёжно)
         try
         {
-            var settings = new { UseProxy, ProxyAddress };
-            var json = System.Text.Json.JsonSerializer.Serialize(settings);
-            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dazzconv_proxy_settings", json);
+            var settingsPath = GetProxySettingsPath();
+            await File.WriteAllTextAsync(settingsPath, json);
+            Logger.LogInfo($"[Proxy] Сохранено в файл: {settingsPath}");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Logger.LogInfo($"[Proxy] Ошибка записи в файл: {ex.Message}");
+        }
+
+        // 2. Дублируем в localStorage (для совместимости)
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dazzconv_proxy_settings", json);
+            Logger.LogInfo("[Proxy] Сохранено в localStorage");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogInfo($"[Proxy] Ошибка записи в localStorage: {ex.Message}");
+        }
+
+        // 3. Сразу применяем прокси к загрузчику
+        ApplyProxy();
     }
+
 
     private async Task TestProxyConnection()
     {
@@ -1465,7 +1735,6 @@
 
         address = address.Trim();
 
-        // Если уже указан протокол — возвращаем как есть
         if (address.StartsWith("http://") ||
             address.StartsWith("https://") ||
             address.StartsWith("socks5://") ||
@@ -1475,7 +1744,6 @@
             return address;
         }
 
-        // Разделяем на хост и порт
         var parts = address.Split(':');
 
         if (parts.Length == 2)
@@ -1483,31 +1751,24 @@
             var host = parts[0];
             var port = parts[1];
 
-            // Определяем тип прокси по порту
             if (port == "1080" || port == "9050" || port == "9150")
             {
-                // SOCKS5
                 return $"socks5://{host}:{port}";
             }
             else if (port == "8080" || port == "3128" || port == "8888" || port == "80")
             {
-                // HTTP
                 return $"http://{host}:{port}";
             }
             else if (port == "443")
             {
-                // HTTPS
                 return $"https://{host}:{port}";
             }
             else
             {
-                // По умолчанию — SOCKS5
                 return $"socks5://{host}:{port}";
             }
         }
 
-        // Если нет порта — добавляем стандартный
-        // Проверяем, похоже ли на домен/IP
         if (address.Contains(".") || address == "localhost")
         {
             return $"socks5://{address}:1080";
@@ -1539,7 +1800,6 @@
             return;
         }
 
-        // Проверка запрещённых сайтов
         if (IsUrlBlocked(UrlInput, out var blockReason))
         {
             await ShowToast($"🚫 {blockReason}", ToastType.Error);
@@ -1571,21 +1831,20 @@
         }
     }
 
-    // ===== ИСПРАВЛЕННЫЙ ВЫБОР ПАПКИ через Win32FolderPicker =====
     private async Task ChooseFolder()
     {
         try
         {
 #if WINDOWS
-            var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для загрузок");
+    var folder = await Win32FolderPicker.PickFolderAsync("Выберите папку для загрузок");
 
-            if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
-            {
-                DownloadPath = folder;
-                Downloader.SetDownloadPath(folder);
-                await UpdateCacheSizeAsync();
-                await ShowToast($"✅ Папка загрузки: {folder}", ToastType.Success);
-            }
+    if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+    {
+    DownloadPath = folder;
+    Downloader.SetDownloadPath(folder); _ = SaveStateAsync();
+    await UpdateCacheSizeAsync();
+    await ShowToast($"✅ Папка загрузки: {folder}", ToastType.Success);
+    }
 #else
             var options = new PickOptions { PickerTitle = "Выберите любой файл, чтобы указать папку" };
             var result = await FilePicker.Default.PickAsync(options);
@@ -1596,7 +1855,7 @@
                 if (!string.IsNullOrEmpty(folder))
                 {
                     DownloadPath = folder;
-                    Downloader.SetDownloadPath(folder);
+                    Downloader.SetDownloadPath(folder); _ = SaveStateAsync();
                     await UpdateCacheSizeAsync();
                 }
             }
@@ -1616,8 +1875,19 @@
             return;
         }
 
-        // Проверка запрещённых сайтов
-        if (IsUrlBlocked(UrlInput, out var blockReason))
+        var cleanUrl = CleanUrl(UrlInput, IsPlaylist);
+
+        // ЗАЩИТА: проверяем что YouTube URL содержит ID видео
+        if (cleanUrl.Contains("youtube.com/watch", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!cleanUrl.Contains("v=", StringComparison.OrdinalIgnoreCase))
+            {
+                await ShowToast("❌ Неправильная ссылка YouTube! Не найден ID видео (v=...).\n\nПравильный формат:\nhttps://www.youtube.com/watch?v=VIDEO_ID", ToastType.Error);
+                return;
+            }
+        }
+
+        if (IsUrlBlocked(cleanUrl, out var blockReason))
         {
             _blockedSiteWarning = blockReason;
             await ShowToast($"🚫 {blockReason}", ToastType.Error);
@@ -1627,24 +1897,29 @@
 
         _blockedSiteWarning = "";
 
-        if (UseProxy && !string.IsNullOrWhiteSpace(ProxyAddress))
-            Downloader.SetProxy(FormatProxyUrl(ProxyAddress));
-        else
-            Downloader.SetProxy(null);
+        ApplyProxy();
+
+        // для YouTube поднимаем локальный сервер PO-токенов (если он установлен)
+        if (cleanUrl.Contains("youtu", StringComparison.OrdinalIgnoreCase))
+        {
+            try { await Tools.EnsurePotServerAsync(); }
+            catch (Exception ex) { Logger.LogWarning($"Downloads: сервер PO-токенов не запущен: {ex.Message}"); }
+        }
 
         try
         {
             IsDownloading = true;
             IsCancelling = false;
             Cts = new CancellationTokenSource();
+            _ = SaveStateAsync();
             DownloadProgressText = "Инициализация...";
 
-            string format;
+            string? format;
             bool isAudioOnly = false;
 
             if (DownloadType == "audio")
             {
-                format = "bestaudio";
+                format = null;
                 isAudioOnly = true;
             }
             else if (DownloadType == "custom")
@@ -1653,31 +1928,104 @@
             }
             else
             {
-                format = VideoQuality == "best"
-                    ? "best"
-                    : $"bestvideo[height<={VideoQuality}]+bestaudio/best[height<={VideoQuality}]";
+                if (VideoQuality == "best")
+                {
+                    format = null;
+                }
+                else
+                {
+                    format = $"bestvideo[height<={VideoQuality}]+bestaudio/best[height<={VideoQuality}]";
+                }
             }
 
+            // Раньше: double.TryParse без InvariantCulture → при русской локали "12.5" не парсилось
+            // и прогресс не двигался; плюс StateHasChanged на КАЖДУЮ строку yt-dlp.
+            var lastRender = DateTime.MinValue;
             var progress = new Progress<string>(line =>
             {
                 DownloadProgressText = line;
-                InvokeAsync(StateHasChanged);
+
+                var item = CurrentDownload;
+                if (item != null)
+                {
+                    var match = ProgressRegex.Match(line);
+                    if (match.Success &&
+                        double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var percent))
+                    {
+                        item.Progress = (int)percent;
+                        item.Status = $"Загрузка: {percent:F1}%";
+                    }
+                }
+
+                var now = DateTime.UtcNow;
+                if (!_disposed && (now - lastRender).TotalMilliseconds >= 250)
+                {
+                    lastRender = now;
+                    _ = InvokeAsync(StateHasChanged);
+                }
             });
 
             if (IsPlaylist)
             {
+                CurrentDownload = new DownloadItem
+                {
+                    Url = cleanUrl,
+                    Title = "📚 Скачивание плейлиста...",
+                    Status = "Инициализация...",
+                    Progress = 0
+                };
+                StateHasChanged();
+
                 var items = await Downloader.DownloadPlaylistAsync(
-                    UrlInput, format, isAudioOnly, token: Cts.Token);
-                await ShowToast($"✅ Загружено {items.Count} элементов", ToastType.Success);
+                    cleanUrl,
+                    format,
+                    isAudioOnly,
+                    token: Cts.Token,
+                    audioFormat: AudioFormat,
+                    audioBitrate: AudioBitrate,
+                    videoContainer: VideoContainer,
+                    progress: progress,
+                    liveItem: CurrentDownload);
+
+                // итог берём из статуса, который выставил сервис (раньше всегда показывалось «Альбом завершён»)
+                var albumStatus = CurrentDownload?.Status ?? "";
+                if (albumStatus.StartsWith("❌"))
+                    await ShowToast(albumStatus, ToastType.Error);
+                else if (albumStatus.StartsWith("⚠️"))
+                    await ShowToast(albumStatus, ToastType.Warning);
+                else if (items.Count == 0)
+                    await ShowToast("⚠️ Ничего не скачано", ToastType.Warning);
+                else
+                    await ShowToast($"✅ Альбом скачан: {items.Count} шт. (в подпапке «{CurrentDownload?.Title?.Replace("📚 ", "")}»)", ToastType.Success);
             }
             else
             {
+                // Создаём объект ДО вызова DownloadAsync
+                CurrentDownload = new DownloadItem
+                {
+                    Url = cleanUrl,
+                    Title = "Получение информации...",
+                    Status = "Инициализация...",
+                    Progress = 0
+                };
+                StateHasChanged();
+
+                // Передаём existingItem — сервис будет обновлять ТОТ ЖЕ объект
                 CurrentDownload = await Downloader.DownloadAsync(
-                    UrlInput, format, isAudioOnly, null, progress, Cts.Token, AudioFormat, AudioBitrate);
+                    cleanUrl,
+                    format,
+                    isAudioOnly,
+                    null,
+                    progress,
+                    Cts.Token,
+                    AudioFormat,
+                    AudioBitrate,
+                    VideoContainer,
+                    false,
+                    CurrentDownload);  // ← ПЕРЕДАЁМ existingItem!
 
                 if (CurrentDownload != null)
                 {
-                    // НОВОЕ: Перечитываем размер файла с диска (на случай если yt-dlp не сообщил)
                     if (!string.IsNullOrEmpty(CurrentDownload.FilePath) && File.Exists(CurrentDownload.FilePath))
                     {
                         try
@@ -1689,12 +2037,10 @@
                         catch { }
                     }
 
-                    // НОВОЕ: Если путь пустой, но файл появился в папке — ищем его
                     if (string.IsNullOrEmpty(CurrentDownload.FilePath) && !string.IsNullOrEmpty(DownloadPath) && Directory.Exists(DownloadPath))
                     {
                         try
                         {
-                            // Берём самый свежий файл в папке загрузок
                             var latestFile = Directory.GetFiles(DownloadPath)
                                 .Select(f => new FileInfo(f))
                                 .Where(f => f.Length > 0 && f.LastWriteTime > DateTime.Now.AddMinutes(-5))
@@ -1711,6 +2057,31 @@
                         catch { }
                     }
 
+                    if (!string.IsNullOrWhiteSpace(CustomFileName))
+                    {
+                        if (!string.IsNullOrEmpty(CurrentDownload.FilePath) && File.Exists(CurrentDownload.FilePath))
+                        {
+                            try
+                            {
+                                var oldPath = CurrentDownload.FilePath;
+                                var newPath = RenameFileOnDisk(oldPath, CustomFileName);
+                                CurrentDownload.FilePath = newPath;
+                                CurrentDownload.Title = Path.GetFileNameWithoutExtension(newPath);
+                                ApplyPathChange(oldPath, newPath, CurrentDownload.Title);
+                                CustomFileName = "";
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.LogWarning($"Downloads: не удалось переименовать: {ex.Message}");
+                                await ShowToast($"⚠️ Файл скачан, но имя не применено: {ex.Message}", ToastType.Warning);
+                            }
+                        }
+                        else
+                        {
+                            await ShowToast("⚠️ Не удалось применить своё имя: путь к файлу не определён", ToastType.Warning);
+                        }
+                    }
+
                     if (!string.IsNullOrEmpty(CurrentDownload.FilePath))
                     {
                         var fileName = Path.GetFileName(CurrentDownload.FilePath);
@@ -1722,8 +2093,6 @@
                     }
                 }
 
-                SaveDownloadHistory();
-                await UpdateCacheSizeAsync();
             }
 
             await UpdateCacheSizeAsync();
@@ -1740,23 +2109,13 @@
         {
             IsDownloading = false;
             IsCancelling = false;
-            CurrentDownload = null;
+            // CurrentDownload больше не обнуляется: раньше карточка «Последняя загрузка» никогда не показывалась
             Cts?.Dispose();
             Cts = null;
             StateHasChanged();
         }
     }
 
-    private void SaveDownloadHistory()
-    {
-        try
-        {
-            StateHasChanged();
-        }
-        catch { }
-    }
-
-    // ===== ИСПРАВЛЕННАЯ ОТМЕНА — моментальная =====
     private async Task CancelDownload()
     {
         if (!IsDownloading || IsCancelling) return;
@@ -1766,18 +2125,13 @@
             IsCancelling = true;
             StateHasChanged();
 
-            // 1. Отправляем сигнал отмены в CancellationToken
             Cts?.Cancel();
-
-            // 2. Принудительно убиваем процесс yt-dlp
             Downloader.CancelDownload();
 
             await ShowToast("⚠️ Отмена загрузки...", ToastType.Warning);
 
-            // Даём процессу 2 секунды на завершение
             await Task.Delay(2000);
 
-            // 3. Если всё ещё "висит" — принудительно сбрасываем состояние
             if (IsDownloading)
             {
                 IsDownloading = false;
@@ -1827,39 +2181,78 @@
 
     private enum ToastType { Success, Error, Warning, Info }
 
+    // ───────── сохранение настроек загрузки (файл в AppData, как и прокси; localStorage — запасной вариант) ─────────
+    private static string GetDownloadSettingsPath()
+    {
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DazzConv");
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "download_settings.json");
+    }
+
     private async Task SaveStateAsync()
     {
-        try
+        var state = new DownloadState
         {
-            var state = new { UrlInput, DownloadType, VideoQuality, AudioFormat, AudioBitrate, VideoContainer, IsPlaylist, SelectedFormatId };
-            var json = JsonSerializer.Serialize(state);
-            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dazzconv_download_state", json);
-        }
+            UrlInput = UrlInput,
+            DownloadType = DownloadType,
+            VideoQuality = VideoQuality,
+            AudioFormat = AudioFormat,
+            AudioBitrate = AudioBitrate,
+            VideoContainer = VideoContainer,
+            IsPlaylist = IsPlaylist,
+            SelectedFormatId = SelectedFormatId,
+            DownloadPath = DownloadPath
+        };
+        var json = JsonSerializer.Serialize(state);
+
+        try { await File.WriteAllTextAsync(GetDownloadSettingsPath(), json); }
+        catch (Exception ex) { Logger.LogWarning($"Downloads: не удалось сохранить настройки: {ex.Message}"); }
+
+        try { await JSRuntime.InvokeVoidAsync("localStorage.setItem", "dazzconv_download_state", json); }
         catch { }
     }
 
     private async Task LoadStateAsync()
     {
+        DownloadState? state = null;
+
         try
         {
-            var json = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dazzconv_download_state");
-            if (!string.IsNullOrEmpty(json))
-            {
-                var state = JsonSerializer.Deserialize<DownloadState>(json);
-                if (state != null)
-                {
-                    UrlInput = state.UrlInput ?? "";
-                    DownloadType = state.DownloadType ?? "video";
-                    VideoQuality = state.VideoQuality ?? "best";
-                    AudioFormat = state.AudioFormat ?? "mp3";
-                    AudioBitrate = state.AudioBitrate;
-                    VideoContainer = state.VideoContainer ?? "mkv";
-                    IsPlaylist = state.IsPlaylist;
-                    SelectedFormatId = state.SelectedFormatId ?? "";
-                }
-            }
+            var path = GetDownloadSettingsPath();
+            if (File.Exists(path))
+                state = JsonSerializer.Deserialize<DownloadState>(await File.ReadAllTextAsync(path));
         }
-        catch { }
+        catch (Exception ex) { Logger.LogWarning($"Downloads: ошибка чтения настроек: {ex.Message}"); }
+
+        if (state == null)
+        {
+            try
+            {
+                var json = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "dazzconv_download_state");
+                if (!string.IsNullOrEmpty(json)) state = JsonSerializer.Deserialize<DownloadState>(json);
+            }
+            catch { }
+        }
+
+        if (state == null) return;
+
+        UrlInput = state.UrlInput ?? "";
+        DownloadType = state.DownloadType is "video" or "audio" or "custom" ? state.DownloadType : "video";
+        VideoQuality = state.VideoQuality ?? "best";
+        AudioFormat = state.AudioFormat ?? "mp3";
+        if (state.AudioBitrate > 0) AudioBitrate = state.AudioBitrate;
+        VideoContainer = state.VideoContainer ?? "mkv";
+        IsPlaylist = state.IsPlaylist;
+        SelectedFormatId = state.SelectedFormatId ?? "";
+
+        // «Выбрать формат» без загруженного списка форматов выбрать нечем — возвращаемся к видео
+        if (DownloadType == "custom" && string.IsNullOrEmpty(SelectedFormatId)) DownloadType = "video";
+
+        if (!string.IsNullOrWhiteSpace(state.DownloadPath) && Directory.Exists(state.DownloadPath))
+        {
+            DownloadPath = state.DownloadPath;
+            Downloader.SetDownloadPath(state.DownloadPath);
+        }
     }
 
     private class DownloadState
@@ -1872,5 +2265,6 @@
         public string? VideoContainer { get; set; }
         public bool IsPlaylist { get; set; }
         public string? SelectedFormatId { get; set; }
+        public string? DownloadPath { get; set; }
     }
 }

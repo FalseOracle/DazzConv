@@ -1,0 +1,119 @@
+@using ConverToDazz.Core.Services
+@using DazzConv.Services
+
+@* ═══════════════════════════════════════════════════════════════════════════════════
+   ОБЩАЯ ФОРМА НАСТРОЕК ИЗОБРАЖЕНИЙ (страница «Изображения» и «Пакетная конвертация»).
+   Форматы и их особенности — из FormatCatalog, значения — в ImageSettings.
+   Рендерит содержимое карточки — карточку создаёт страница.
+   ═══════════════════════════════════════════════════════════════════════════════════ *@
+
+<div class="mb-3">
+    <label class="form-label"><strong>Выходной формат:</strong></label>
+    <select class="form-select @(Large ? "form-select-lg" : "")" value="@Settings.OutputFormat" @onchange="OnFormatChangedAsync">
+        @foreach (var grp in FormatCatalog.ImageFormats.GroupBy(f => f.Group))
+        {
+            <optgroup label="@grp.Key">
+                @foreach (var f in grp)
+                {
+                    <option value="@f.Ext">@f.Ext.ToUpper() — @f.Name, @f.Description</option>
+                }
+            </optgroup>
+        }
+    </select>
+
+    @if (Settings.Format.MaxSize > 0)
+    {
+        <div class="alert alert-info mt-2 mb-0 py-2 small">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>@Settings.Format.Ext.ToUpper():</strong> максимум @(Settings.Format.MaxSize)×@(Settings.Format.MaxSize) px, большее изображение уменьшится автоматически.
+        </div>
+    }
+    @if (!Settings.Format.Alpha)
+    {
+        <div class="form-text">Этот формат не хранит прозрачность: прозрачные области станут белыми.</div>
+    }
+    @if (Settings.Format.Animation)
+    {
+        <div class="form-text">Анимированные GIF и WebP сохраняют все кадры.</div>
+    }
+    @if (!string.IsNullOrEmpty(Settings.Format.Note))
+    {
+        <div class="form-text">@Settings.Format.Note</div>
+    }
+</div>
+
+@if (Settings.ShowQuality)
+{
+    <div class="mb-3">
+        <label class="form-label">
+            <strong>Качество: @Settings.Quality%</strong>
+            <span class="text-muted ms-2 small">@ImageSettings.QualityDescription(Settings.Quality)</span>
+        </label>
+        <input type="range" class="form-range" min="1" max="100" step="5" value="@Settings.Quality"
+               @oninput="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var q)) Settings.Quality = q; })" />
+        <div class="d-flex justify-content-between small">
+            <span class="text-muted">Мин. размер</span>
+            <span class="text-muted">Баланс</span>
+            <span class="text-muted">Макс. качество</span>
+        </div>
+    </div>
+}
+
+<div class="mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="@(IdPrefix)Resize" checked="@Settings.ResizeEnabled"
+               @onchange="e => SetAsync(() => Settings.ResizeEnabled = (bool)(e.Value ?? false))" />
+        <label class="form-check-label" for="@(IdPrefix)Resize"><strong>Изменить размер</strong></label>
+    </div>
+    @if (Settings.ResizeEnabled)
+    {
+        <div class="row mt-2 g-2">
+            <div class="col-6">
+                <label class="form-label small mb-1">Ширина (px)</label>
+                <input type="number" class="form-control form-control-sm @(ImageSettings.IsValidSize(Settings.Width) ? "" : "is-invalid")"
+                       value="@Settings.Width" min="1" max="8192"
+                       @onchange="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.Width = v; })" />
+            </div>
+            <div class="col-6">
+                <label class="form-label small mb-1">Высота (px)</label>
+                <input type="number" class="form-control form-control-sm @(ImageSettings.IsValidSize(Settings.Height) ? "" : "is-invalid")"
+                       value="@Settings.Height" min="1" max="8192"
+                       @onchange="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.Height = v; })" />
+            </div>
+        </div>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="@(IdPrefix)Aspect" checked="@Settings.KeepAspectRatio"
+                   @onchange="e => SetAsync(() => Settings.KeepAspectRatio = (bool)(e.Value ?? false))" />
+            <label class="form-check-label small" for="@(IdPrefix)Aspect">Сохранить пропорции</label>
+        </div>
+        @if (InputWidth > 0 && InputHeight > 0)
+        {
+            <div class="form-text">Оригинал: @InputWidth×@InputHeight px</div>
+        }
+    }
+</div>
+
+<div class="mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="@(IdPrefix)Opt" checked="@Settings.OptimizeSize"
+               @onchange="e => SetAsync(() => Settings.OptimizeSize = (bool)(e.Value ?? false))" />
+        <label class="form-check-label" for="@(IdPrefix)Opt">Оптимизировать размер файла (удалить метаданные)</label>
+    </div>
+</div>
+
+@code {
+    [Parameter] public ImageSettings Settings { get; set; } = new();
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public int InputWidth { get; set; }
+    [Parameter] public int InputHeight { get; set; }
+    [Parameter] public string IdPrefix { get; set; } = "isf";
+
+    private async Task SetAsync(Action change)
+    {
+        change();
+        await OnChanged.InvokeAsync();
+    }
+
+    private Task OnFormatChangedAsync(ChangeEventArgs e) => SetAsync(() => Settings.SetFormat(e.Value?.ToString() ?? "png"));
+}

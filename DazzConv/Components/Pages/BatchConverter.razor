@@ -1,8 +1,10 @@
 ﻿@page "/batch"
+@implements IDisposable
 @using System.IO
 @using System.Linq
 @using ConverToDazz.Core.Services
 @using DazzConv.Services
+@using DazzConv.Components.Shared
 @using Microsoft.Maui.Storage
 @using Microsoft.JSInterop
 @inject ImageConverterService ImageService
@@ -217,92 +219,12 @@
                 <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Параметры конвертации</h5>
             </div>
             <div class="card-body px-4 pb-4">
+                <!-- Настройки — те же общие формы, что на одиночных страницах: любое изменение формы попадает и сюда -->
                 @if (BatchType == "mixed" || BatchType == "audio")
                 {
                     <div class="mb-4 p-3 border rounded">
                         <h6 class="fw-bold mb-3 text-primary">🎵 Настройки Аудио</h6>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">Формат</label>
-                                <select class="form-select" value="@AudioOutputFormat" @onchange="OnAudioFormatChanged">
-                                    <optgroup label="🎵 Популярные">
-                                        <option value="mp3">MP3 — универсальный</option>
-                                        <option value="aac">AAC — лучше MP3</option>
-                                        <option value="ogg">OGG Vorbis — открытый</option>
-                                        <option value="opus">OPUS — современный</option>
-                                        <option value="m4a">M4A — Apple</option>
-                                        <option value="wma">WMA — Windows</option>
-                                    </optgroup>
-                                    <optgroup label="💎 Без потерь (Lossless)">
-                                        <option value="flac">FLAC — универсальный lossless</option>
-                                        <option value="wav">WAV — без сжатия</option>
-                                        <option value="alac">ALAC — Apple Lossless</option>
-                                        <option value="aiff">AIFF — Mac/Pro</option>
-                                        <option value="ape">APE — Monkey's Audio</option>
-                                        <option value="wv">WavPack — hybrid lossless</option>
-                                        <option value="tta">TTA — True Audio</option>
-                                    </optgroup>
-                                    <optgroup label="🎬 Видеомонтаж">
-                                        <option value="ac3">AC3 — Dolby Digital</option>
-                                        <option value="caf">CAF — Core Audio</option>
-                                    </optgroup>
-                                    <optgroup label="🎙️ Голос / Вещание">
-                                        <option value="amr">AMR — мобильная речь</option>
-                                        <option value="spx">Speex — VoIP</option>
-                                        <option value="mp2">MP2 — DAB радио</option>
-                                    </optgroup>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                @if (AudioSupportsBitrate)
-                                {
-                                    @if (AudioOutputFormat == "ac3")
-                                    {
-                                        <label class="form-label fw-semibold mb-2">
-                                            Битрейт: <span class="text-primary">@AudioBitrate</span> kbps
-                                            <span class="badge bg-warning text-dark ms-2">AC3</span>
-                                        </label>
-                                        <select class="form-select" value="@AudioBitrate" @onchange="OnAudioBitrateChanged">
-                                            <option value="32">32 kbps (минимальный)</option>
-                                            <option value="40">40 kbps</option>
-                                            <option value="48">48 kbps</option>
-                                            <option value="56">56 kbps</option>
-                                            <option value="64">64 kbps</option>
-                                            <option value="80">80 kbps</option>
-                                            <option value="96">96 kbps</option>
-                                            <option value="112">112 kbps</option>
-                                            <option value="128">128 kbps (стандарт)</option>
-                                            <option value="160">160 kbps</option>
-                                            <option value="192">192 kbps</option>
-                                            <option value="224">224 kbps</option>
-                                            <option value="256">256 kbps</option>
-                                            <option value="320">320 kbps</option>
-                                            <option value="384">384 kbps</option>
-                                            <option value="448">448 kbps (DVD стандарт)</option>
-                                            <option value="512">512 kbps</option>
-                                            <option value="576">576 kbps</option>
-                                            <option value="640">640 kbps (максимальный)</option>
-                                        </select>
-                                        <div class="form-text text-warning mt-1">
-                                            <i class="bi bi-exclamation-triangle me-1"></i>
-                                            AC3 поддерживает только определенные битрейты
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <label class="form-label fw-semibold mb-2">Битрейт: <span class="text-primary">@AudioBitrate</span> kbps</label>
-                                        <input type="range" class="form-range" min="64" max="320" step="32" value="@AudioBitrate" @oninput="OnAudioBitrateChanged" />
-                                        <div class="d-flex justify-content-between small text-muted">
-                                            <span>64</span><span>128</span><span>192</span><span>256</span><span>320</span>
-                                        </div>
-                                    }
-                                }
-                            </div>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" @bind="NormalizeAudio" id="normCheck" />
-                            <label class="form-check-label" for="normCheck">Нормализовать громкость</label>
-                        </div>
+                        <AudioSettingsForm Settings="A" IdPrefix="ba" OnChanged="StateHasChanged" />
                     </div>
                 }
 
@@ -310,95 +232,7 @@
                 {
                     <div class="mb-4 p-3 border rounded">
                         <h6 class="fw-bold mb-3 text-success">🖼️ Настройки Изображений</h6>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">Формат</label>
-                                <select class="form-select" value="@ImageOutputFormat" @onchange="OnImageFormatChanged">
-                                    <optgroup label="🌐 Популярные">
-                                        <option value="jpg">JPG — универсальный</option>
-                                        <option value="png">PNG — без потерь, прозрачность</option>
-                                        <option value="webp">WebP — Google, для веба</option>
-                                        <option value="avif">AVIF — лучшее сжатие</option>
-                                        <option value="gif">GIF — анимации, 256 цветов</option>
-                                        <option value="heic">HEIC — Apple iPhone</option>
-                                    </optgroup>
-                                    <optgroup label="🎨 Дизайн / Печать">
-                                        <option value="tiff">TIFF — полиграфия, CMYK</option>
-                                        <option value="bmp">BMP — без сжатия, Windows</option>
-                                        <option value="pnm">PNM — Unix, простой</option>
-                                        <option value="psd">PSD — Photoshop</option>
-                                    </optgroup>
-                                    <optgroup label="🎮 Для игр">
-                                        <option value="tga">TGA — Targa, ретро-игры</option>
-                                        <option value="dds">DDS — DirectX текстуры</option>
-                                        <option value="pcx">PCX — DOS-игры</option>
-                                        <option value="sgi">SGI — Silicon Graphics</option>
-                                    </optgroup>
-                                    <optgroup label="🎬 Видео / VFX">
-                                        <option value="dpx">DPX — киносканеры</option>
-                                        <option value="exr">OpenEXR — VFX, HDR</option>
-                                        <option value="hdr">HDR — Radiance, HDRI</option>
-                                        <option value="cin">CINEON — Kodak</option>
-                                    </optgroup>
-                                    <optgroup label="🔧 Спецформаты">
-                                        <option value="ico">ICO — иконки Windows</option>
-                                        <option value="jxl">JPEG XL — преемник JPEG</option>
-                                        <option value="qoi">QOI — быстрый lossless</option>
-                                        <option value="ff">Farbfeld — простой lossless</option>
-                                    </optgroup>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                @if (ImageSupportsQuality)
-                                {
-                                    <label class="form-label fw-semibold mb-2">Качество: <span class="text-success">@ImageQuality</span>%</label>
-                                    <input type="range" class="form-range" min="1" max="100" value="@ImageQuality" @oninput="OnImageQualityChanged" />
-                                    <div class="d-flex justify-content-between small text-muted">
-                                        <span>1%</span><span>50%</span><span>100%</span>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <label class="form-label fw-semibold mb-2">Качество</label>
-                                    <div class="alert alert-info mb-0 py-2 small">
-                                        <i class="bi bi-info-circle me-1"></i>
-                                        Для формата <strong>@ImageOutputFormat.ToUpper()</strong> качество не применяется (формат без потерь)
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" @bind="ResizeImages" id="resizeCheck" />
-                            <label class="form-check-label" for="resizeCheck">Изменить размер</label>
-                        </div>
-                        @if (ResizeImages)
-                        {
-                            <div class="row mt-2">
-                                <div class="col-6">
-                                    <label class="form-label small">Ширина: @ImageWidth px</label>
-                                    <input type="range" class="form-range" min="100" max="4096" step="100" value="@ImageWidth" @oninput="OnImageWidthChanged" />
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label small">Высота: @ImageHeight px</label>
-                                    <input type="range" class="form-range" min="100" max="4096" step="100" value="@ImageHeight" @oninput="OnImageHeightChanged" />
-                                </div>
-                            </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox" @bind="KeepAspectRatio" id="aspectCheck" />
-                                <label class="form-check-label" for="aspectCheck">Сохранить пропорции</label>
-                            </div>
-                            @if (ImageOutputFormat == "ico")
-                            {
-                                <div class="alert alert-warning mt-2 mb-0 py-2 small">
-                                    <i class="bi bi-exclamation-triangle me-1"></i>
-                                    Для ICO размер ограничен 256×256 пикселей
-                                </div>
-                            }
-                        }
-                        <div class="form-check mt-2">
-                            <input class="form-check-input" type="checkbox" @bind="OptimizeImages" id="optCheck" />
-                            <label class="form-check-label" for="optCheck">Оптимизировать размер (удалить метаданные)</label>
-                        </div>
+                        <ImageSettingsForm Settings="S" IdPrefix="bi" OnChanged="StateHasChanged" />
                     </div>
                 }
 
@@ -410,147 +244,8 @@
                             <i class="bi bi-exclamation-triangle-fill me-2"></i>
                             <strong>Внимание!</strong> Конвертация видео может занять много времени.
                         </div>
-
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">Формат</label>
-                                <select class="form-select" value="@VideoOutputFormat" @onchange="OnVideoFormatChanged">
-                                    <optgroup label="🌐 Популярные">
-                                        <option value="mp4">MP4 — универсальный, H.264/H.265</option>
-                                        <option value="mkv">MKV — все кодеки, субтитры</option>
-                                        <option value="avi">AVI — старая совместимость</option>
-                                        <option value="mov">MOV — Apple QuickTime</option>
-                                        <option value="wmv">WMV — Windows Media</option>
-                                        <option value="flv">FLV — Flash Video</option>
-                                        <option value="webm">WebM — веб, VP9/AV1</option>
-                                    </optgroup>
-                                    <optgroup label="📱 Мобильные / Apple">
-                                        <option value="m4v">M4V — Apple iTunes/Video</option>
-                                        <option value="3gp">3GP — мобильные устройства</option>
-                                    </optgroup>
-                                    <optgroup label="💿 DVD / Старые">
-                                        <option value="mpeg">MPEG — MPEG-1/2, DVD</option>
-                                        <option value="mpg">MPG — MPEG-1/2, DVD</option>
-                                        <option value="vob">VOB — DVD Video Object</option>
-                                    </optgroup>
-                                    <optgroup label="📡 Streaming / TV">
-                                        <option value="ts">TS — транспортный поток, TV</option>
-                                        <option value="m2ts">M2TS — Blu-ray, AVCHD</option>
-                                    </optgroup>
-                                    <optgroup label="🔧 Другие">
-                                        <option value="ogv">OGV — Ogg Theora, открытый</option>
-                                        <option value="gif">GIF — анимация, 256 цветов</option>
-                                        <option value="asf">ASF — Advanced Systems Format</option>
-                                        <option value="rm">RM — RealMedia</option>
-                                        <option value="divx">DivX — DivX видео</option>
-                                        <option value="f4v">F4V — Flash Video (новый)</option>
-                                    </optgroup>
-                                </select>
-                                @if (!IsVideoFormatVerified(VideoOutputFormat))
-                                {
-                                    <div class="alert alert-warning mt-2 mb-0 py-2 small">
-                                        <i class="bi bi-exclamation-triangle me-1"></i>
-                                        @GetFormatWarning(VideoOutputFormat)
-                                    </div>
-                                }
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">Видео кодек</label>
-                                <select class="form-select" value="@VideoCodec" @onchange="OnVideoCodecChanged">
-                                    <option value="libx264">H.264 (libx264) — универсальный</option>
-                                    <option value="mpeg4">MPEG-4 — старая совместимость</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        @if (VideoSupportsCrf)
-                        {
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-semibold mb-2">Качество (CRF): <span class="text-danger">@VideoCrf</span></label>
-                                    <input type="range" class="form-range" min="0" max="51" value="@VideoCrf" @oninput="OnVideoCrfChanged" />
-                                    <div class="form-text">0 = без потерь, 23 = стандарт, 51 = худшее</div>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-semibold mb-2">Preset (скорость)</label>
-                                    <select class="form-select" value="@VideoPreset" @onchange="OnVideoPresetChanged">
-                                        <option value="ultrafast">Ultrafast (быстро)</option>
-                                        <option value="superfast">Superfast</option>
-                                        <option value="veryfast">Veryfast</option>
-                                        <option value="faster">Faster</option>
-                                        <option value="fast">Fast</option>
-                                        <option value="medium">Medium (баланс)</option>
-                                        <option value="slow">Slow (медленно)</option>
-                                        <option value="slower">Slower</option>
-                                        <option value="veryslow">Veryslow (лучшее качество)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-semibold mb-2">QScale (качество): <span class="text-danger">@VideoQScale</span></label>
-                                    <input type="range" class="form-range" min="1" max="31" value="@VideoQScale" @oninput="OnVideoQScaleChanged" />
-                                    <div class="form-text">1 = лучшее, 31 = худшее</div>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-semibold mb-2">Preset (скорость)</label>
-                                    <select class="form-select" value="@VideoPreset" @onchange="OnVideoPresetChanged">
-                                        <option value="ultrafast">Ultrafast</option>
-                                        <option value="superfast">Superfast</option>
-                                        <option value="veryfast">Veryfast</option>
-                                        <option value="faster">Faster</option>
-                                        <option value="fast">Fast</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="slow">Slow</option>
-                                    </select>
-                                </div>
-                            </div>
-                        }
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">Разрешение</label>
-                                <select class="form-select" value="@VideoResolution" @onchange="OnVideoResolutionChanged">
-                                    <option value="">Оригинальное</option>
-                                    <option value="2160p">4K (2160p)</option>
-                                    <option value="1440p">2K (1440p)</option>
-                                    <option value="1080p">Full HD (1080p)</option>
-                                    <option value="720p">HD (720p)</option>
-                                    <option value="480p">SD (480p)</option>
-                                    <option value="360p">360p</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">Аудио кодек</label>
-                                <select class="form-select" value="@VideoAudioCodec" @onchange="OnVideoAudioCodecChanged">
-                                    <option value="aac">AAC (рекомендуется)</option>
-                                    <option value="libmp3lame">MP3</option>
-                                    <option value="copy">Копировать (без перекодирования)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">Аудио битрейт: <span class="text-danger">@VideoAudioBitrate</span> kbps</label>
-                                <input type="range" class="form-range" min="64" max="320" step="32" value="@VideoAudioBitrate" @oninput="OnVideoAudioBitrateChanged" />
-                                <div class="d-flex justify-content-between small text-muted">
-                                    <span>64</span><span>128</span><span>192</span><span>256</span><span>320</span>
-                                </div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-semibold mb-2">FPS</label>
-                                <select class="form-select" value="@VideoFps" @onchange="OnVideoFpsChanged">
-                                    <option value="">Оригинальный</option>
-                                    <option value="24">24 fps (кино)</option>
-                                    <option value="25">25 fps (PAL)</option>
-                                    <option value="30">30 fps</option>
-                                    <option value="60">60 fps</option>
-                                </select>
-                            </div>
+                            <VideoSettingsForm Settings="V" IdPrefix="bv" OnChanged="StateHasChanged" />
                         </div>
                     </div>
                 }
@@ -1028,6 +723,14 @@
 </style>
 
 @code {
+    // Раньше подписка на горячие клавиши никогда не снималась: HotkeyService живёт всё время работы приложения,
+    // поэтому каждое открытие страницы добавляло ещё один обработчик (утечка + вызовы в уже закрытые страницы).
+    public void Dispose()
+    {
+        Hotkeys.OnCancelRequested -= HandleCancel;
+        try { Cts?.Cancel(); } catch { }
+    }
+
     // ===== Основные поля =====
     private string BatchType = "mixed";
     private List<string> SelectedFiles = new();
@@ -1043,62 +746,15 @@
     private int LoadingFilesTotal = 0;
     private int LoadingFilesRejected = 0;
 
-    // ===== Audio settings =====
-    private string AudioOutputFormat = "mp3";
-    private int AudioBitrate = 192;
-    private bool NormalizeAudio = false;
+    // ===== Настройки конвертации: общие модели (те же, что на одиночных страницах) =====
+    private readonly AudioSettings A = new();
+    private readonly ImageSettings S = new();
+    private readonly VideoSettings V = new();
 
-    // ===== Image settings =====
-    private string ImageOutputFormat = "png";
-    private int ImageQuality = 85;
-    private bool ResizeImages = false;
-    private int ImageWidth = 1920;
-    private int ImageHeight = 1080;
-    private bool KeepAspectRatio = true;
-    private bool OptimizeImages = false;
-    private bool AudioSupportsBitrate => AudioOutputFormat is
-     "mp3" or "aac" or "ogg" or "opus" or "wma" or "m4a" or "ac3" or "amr" or "spx" or "mp2";
-    private bool ImageSupportsQuality => ImageOutputFormat is
-        "jpg" or "jpeg" or "webp" or "avif" or "heic" or "heif" or "jxl";
-    private bool VideoSupportsCrf => VideoCodec is not "mpeg4";
-    // Проверенные форматы, которые точно работают в FFmpeg
-    private readonly HashSet<string> VerifiedVideoFormats = new()
-    {
-        "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm",
-        "m4v", "3gp", "mpeg", "mpg", "vob"
-    };
-
-    // Форматы, которые могут не работать в некоторых сборках FFmpeg
-    private readonly HashSet<string> UnverifiedVideoFormats = new()
-    {
-        "ts", "m2ts", "ogv", "asf", "rm", "divx", "f4v"
-    };
-
-    private bool IsVideoFormatVerified(string format)
-    {
-        return VerifiedVideoFormats.Contains(format.ToLower());
-    }
-
-    private string GetFormatWarning(string format)
-    {
-        if (UnverifiedVideoFormats.Contains(format.ToLower()))
-        {
-            return $"⚠️ Формат {format.ToUpper()} может не поддерживаться вашей сборкой FFmpeg. Рекомендуется использовать MP4, MKV или AVI.";
-        }
-        return "";
-    }
-
-
-    // ===== Video settings =====
-    private string VideoOutputFormat = "mp4";
-    private string VideoCodec = "libx264";
-    private int VideoCrf = 23;
-    private int VideoQScale = 2;
-    private string VideoPreset = "medium";
-    private string VideoResolution = "";
-    private int VideoAudioBitrate = 192;
-    private string VideoAudioCodec = "aac";
-    private string VideoFps = "";
+    // расширения выходных файлов (используются при формировании имён)
+    private string AudioOutputFormat => A.OutputExt;
+    private string ImageOutputFormat => S.OutputFormat;
+    private string VideoOutputFormat => V.OutputFormat;
 
     // ===== Conversion state =====
     private bool IsConverting = false;
@@ -1365,38 +1021,12 @@
         }
     }
 
+    // Входные форматы = выходные (единый список InputFormats): добавили формат в каталог — он принимается и здесь.
     private readonly Dictionary<string, string[]> AllowedExtensions = new()
     {
-        { "audio", new[] {
-        // Популярные
-        ".mp3", ".aac", ".ogg", ".opus", ".wma", ".m4a",
-        // Lossless
-        ".flac", ".wav", ".alac", ".aiff", ".ape", ".wv", ".tta",
-        // Видеомонтаж
-        ".ac3", ".caf",
-        // Вещание
-        ".mp2"
-        // Убраны: .amr, .spx (требуют специальных сборок)
-        } },
-        { "image", new[] {
-            // Популярные
-            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".heic", ".heif",
-            // Дизайн/печать
-            ".bmp", ".tiff", ".tif", ".pnm", ".pbm", ".pgm", ".ppm", ".psd",
-            // Игры
-            ".tga", ".dds", ".pcx", ".sgi", ".rgb",
-            // VFX/видео
-            ".dpx", ".exr", ".hdr", ".cin",
-            // Спецформаты
-            ".ico", ".jxl", ".qoi", ".ff"
-        } },
-        { "video", new[] {
-        // Проверенные форматы, которые работают во всех сборках FFmpeg
-        ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm",
-        ".m4v", ".3gp",
-        ".mpeg", ".mpg", ".vob"
-        // Убраны: .ts, .m2ts, .ogv, .asf, .rm, .divx, .f4v
-        } }
+        { "audio", InputFormats.Audio.Select(e => "." + e).ToArray() },
+        { "image", InputFormats.Image.Select(e => "." + e).ToArray() },
+        { "video", InputFormats.Video.Select(e => "." + e).ToArray() }
     };
 
     private async Task OnMultipleFilesSelected(InputFileChangeEventArgs e)
@@ -1740,7 +1370,7 @@
             if (!string.IsNullOrEmpty(innerExt) && innerExt.Length >= 3 && innerExt.Length <= 5)
             {
                 var innerExtClean = innerExt.TrimStart('.').ToLower();
-                if (new[] { "mp3", "mp4", "wav", "avi", "mkv", "mov", "flac", "ogg", "aac", "m4a", "webm", "flv", "wmv" }.Contains(innerExtClean))
+                if (InputFormats.KindOf(innerExtClean) != null)
                 {
                     fileName = withoutExt;
                     continue;
@@ -1972,27 +1602,6 @@
         return drive.AvailableFreeSpace > requiredBytes;
     }
 
-    private void OnAudioFormatChanged(ChangeEventArgs e) { AudioOutputFormat = e.Value?.ToString() ?? "mp3"; StateHasChanged(); }
-    private void OnAudioBitrateChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) AudioBitrate = v; }
-    private void OnImageFormatChanged(ChangeEventArgs e) { ImageOutputFormat = e.Value?.ToString() ?? "png"; StateHasChanged(); }
-    private void OnImageQualityChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) ImageQuality = v; }
-    private void OnImageWidthChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) ImageWidth = v; }
-    private void OnImageHeightChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) ImageHeight = v; }
-    private void OnVideoFormatChanged(ChangeEventArgs e) { VideoOutputFormat = e.Value?.ToString() ?? "mp4"; StateHasChanged(); }
-    private void OnVideoCodecChanged(ChangeEventArgs e)
-    {
-        VideoCodec = e.Value?.ToString() ?? "libx264";
-        // Для MPEG-4 сбрасываем preset в medium
-        if (VideoCodec == "mpeg4") VideoPreset = "medium";
-        StateHasChanged();
-    }
-    private void OnVideoCrfChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) VideoCrf = Math.Max(0, Math.Min(51, v)); }
-    private void OnVideoQScaleChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) VideoQScale = Math.Max(1, Math.Min(31, v)); }
-    private void OnVideoPresetChanged(ChangeEventArgs e) { VideoPreset = e.Value?.ToString() ?? "medium"; }
-    private void OnVideoResolutionChanged(ChangeEventArgs e) { VideoResolution = e.Value?.ToString() ?? ""; }
-    private void OnVideoAudioBitrateChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var v)) VideoAudioBitrate = v; }
-    private void OnVideoAudioCodecChanged(ChangeEventArgs e) { VideoAudioCodec = e.Value?.ToString() ?? "aac"; }
-    private void OnVideoFpsChanged(ChangeEventArgs e) { VideoFps = e.Value?.ToString() ?? ""; }
 
     // ===== Управление файлами =====
     private void RemoveFile(string file)
@@ -2053,31 +1662,15 @@
     private async Task StartBatchConversion()
     {
 
-        // 🛡️ ВАЛИДАЦИЯ БИТРЕЙТА ДЛЯ AC3
-        if (AudioOutputFormat == "ac3")
+        // единая проверка настроек — те же правила, что на одиночных страницах
+        string? settingsError = null;
+        if (BatchType is "mixed" or "video") settingsError ??= V.Validate();
+        if (BatchType is "mixed" or "image") settingsError ??= S.Validate();
+        if (BatchType is "mixed" or "audio") settingsError ??= A.Validate();
+        if (settingsError != null)
         {
-            int[] validAc3Bitrates = { 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640 };
-            if (!validAc3Bitrates.Contains(AudioBitrate))
-            {
-                await JSRuntime.InvokeVoidAsync("showToast", 
-                    $"⚠️ AC3 не поддерживает битрейт {AudioBitrate} kbps. Используется ближайший допустимый.", "warning");
-                AudioBitrate = validAc3Bitrates.OrderBy(b => Math.Abs(b - AudioBitrate)).First();
-            }
-            if ((BatchType == "mixed" || BatchType == "video") &&
-    SelectedFiles.Any(f => GetFileType(Path.GetExtension(f).ToLower()) == "video") &&
-    !IsVideoFormatVerified(VideoOutputFormat))
-            {
-                var confirm = await JSRuntime.InvokeAsync<bool>("confirm",
-                    $"⚠️ Формат {VideoOutputFormat.ToUpper()} может не поддерживаться вашей сборкой FFmpeg.\n\n" +
-                    $"Рекомендуется использовать: MP4, MKV или AVI.\n\n" +
-                    $"Продолжить?");
-
-                if (!confirm)
-                {
-                    await ShowNotification("Конвертация отменена", NotificationType.Warning);
-                    return;
-                }
-            }
+            await ShowNotification(settingsError, NotificationType.Warning);
+            return;
         }
 
         var invalidFiles = new List<string>();
@@ -2160,6 +1753,7 @@
             Cts = new CancellationTokenSource();
             ConversionResults.Clear();
             var ffmpegPath = FFmpegService.GetFFmpegPath();
+            var usedOutputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             for (int i = 0; i < SelectedFiles.Count; i++)
             {
@@ -2177,10 +1771,7 @@
                 CurrentFileProgress = 0;
                 ConversionStatus = $"Обработка файла {CurrentFileIndex} из {SelectedFiles.Count}...";
 
-                if (i % 10 == 0 || i == SelectedFiles.Count - 1)
-                {
-                    BatchProgress = Math.Min(100, Math.Max(0, (int)((double)CurrentFileIndex / SelectedFiles.Count * 100)));
-                }
+                BatchProgress = (int)((double)i / SelectedFiles.Count * 100);
 
                 try { await InvokeAsync(StateHasChanged); } catch { }
                 await Task.Delay(1);
@@ -2216,6 +1807,10 @@
                     {
                         throw new InvalidOperationException("Путь вывода находится вне выбранной папки!");
                     }
+
+                    // song.mp3 и song.wav → оба в song.flac: второй раньше молча перезаписывал первый;
+                    // а если папка вывода = папка исходника, результат затирал сам исходник
+                    outputPath = GetUniqueOutputPath(outputPath, SelectedFiles[i], usedOutputs);
 
                     var startTime = DateTime.Now;
 
@@ -2262,11 +1857,8 @@
                     });
                 }
 
-                if (i % 10 == 0 || i == SelectedFiles.Count - 1)
-                {
-                    BatchProgress = Math.Min(100, Math.Max(0, (int)((double)CurrentFileIndex / SelectedFiles.Count * 100)));
-                    try { await InvokeAsync(StateHasChanged); } catch { }
-                }
+                BatchProgress = (int)((double)(i + 1) / SelectedFiles.Count * 100);
+                try { await InvokeAsync(StateHasChanged); } catch { }
             }
 
             var successCount = ConversionResults.Count(r => r.Success);
@@ -2314,15 +1906,6 @@
 
     private async Task ConvertAudioFile(string ffmpegPath, string inputFile, string outputFile)
     {
-        var audioCodec = GetAudioCodecForFormat(AudioOutputFormat);
-        var bitrate = AudioBitrate;
-
-        if (AudioOutputFormat == "ac3")
-        {
-            bitrate = GetValidAc3Bitrate(bitrate);
-            if (bitrate > 640) bitrate = 640;
-        }
-
         await AudioService.ConvertAsync(ffmpegPath, inputFile, outputFile, TimeSpan.Zero,
             new Progress<int>(p =>
             {
@@ -2330,7 +1913,8 @@
                 CurrentFileProgress = Math.Max(0, Math.Min(100, p));
                 try { InvokeAsync(StateHasChanged); } catch { }
             }),
-            Cts!.Token);
+            Cts!.Token,
+            A.ToOptions());   // раньше битрейт, частота и нормализация в пакетном режиме вообще не передавались в ffmpeg
 
         if (!(Cts?.IsCancellationRequested ?? false))
             CleanupTempFile(inputFile);
@@ -2356,34 +1940,13 @@
             CurrentFileProgress = 10;
             try { InvokeAsync(StateHasChanged); } catch { }
 
-            var options = new ImageConversionOptions
-            {
-                OutputFormat = ImageOutputFormat,
-                Quality = ImageQuality,
-                ResizeEnabled = ResizeImages,
-                Width = ImageWidth,
-                Height = ImageHeight,
-                KeepAspectRatio = KeepAspectRatio,
-                OptimizeSize = OptimizeImages
-            };
+            var options = S.ToOptions();
 
             CurrentFileProgress = 30;
             try { InvokeAsync(StateHasChanged); } catch { }
 
-            byte[] data;
-            try
-            {
-                data = await ImageService.ConvertAdvancedAsync(inputFile, options);
-            }
-            catch (ImageMagick.MagickCoderErrorException ex) when (
-                ex.Message.Contains("iCCP", StringComparison.OrdinalIgnoreCase) ||
-                ex.Message.Contains("profile", StringComparison.OrdinalIgnoreCase))
-            {
-                Logger.LogWarning($"Batch: iCCP ошибка в {Path.GetFileName(inputFile)}, пробуем без профиля");
-                CurrentFileProgress = 50;
-                try { InvokeAsync(StateHasChanged); } catch { }
-                data = await ConvertImageWithStripProfile(inputFile, options);
-            }
+            // повтор без профилей при ошибке iCCP, прозрачность, анимация и все форматы — внутри сервиса (один код для всех страниц)
+            var data = await ImageService.ConvertAdvancedAsync(inputFile, options, Cts!.Token);
 
             if (Cts?.IsCancellationRequested ?? false)
                 throw new OperationCanceledException(Cts.Token);
@@ -2409,109 +1972,17 @@
             CleanupTempFile(inputFile);
     }
 
-    private Task<byte[]> ConvertImageWithStripProfile(string inputPath, ImageConversionOptions options)
-    {
-        return Task.Run(() =>
-        {
-            var settings = new ImageMagick.MagickReadSettings
-            {
-                ColorSpace = ImageMagick.ColorSpace.sRGB
-            };
-
-            using var image = new ImageMagick.MagickImage(inputPath, settings);
-            image.Strip();
-            image.ColorSpace = ImageMagick.ColorSpace.sRGB;
-
-            if (options.ResizeEnabled)
-            {
-                if (options.KeepAspectRatio)
-                {
-                    image.Resize(new ImageMagick.MagickGeometry((uint)options.Width, (uint)options.Height)
-                    {
-                        IgnoreAspectRatio = false
-                    });
-                }
-                else
-                {
-                    image.Resize((uint)options.Width, (uint)options.Height);
-                }
-            }
-
-            image.Quality = (uint)options.Quality;
-
-            var format = options.OutputFormat.ToLower() switch
-            {
-                // Популярные
-                "png" => ImageMagick.MagickFormat.Png,
-                "jpg" or "jpeg" => ImageMagick.MagickFormat.Jpeg,
-                "webp" => ImageMagick.MagickFormat.WebP,
-                "avif" => ImageMagick.MagickFormat.Avif,
-                "gif" => ImageMagick.MagickFormat.Gif,
-                "heic" or "heif" => ImageMagick.MagickFormat.Heic,
-                "bmp" => ImageMagick.MagickFormat.Bmp,
-                "tiff" or "tif" => ImageMagick.MagickFormat.Tiff,
-                "pnm" or "ppm" => ImageMagick.MagickFormat.Ppm,
-                "pbm" => ImageMagick.MagickFormat.Pbm,
-                "pgm" => ImageMagick.MagickFormat.Pgm,
-                "psd" => ImageMagick.MagickFormat.Psd,
-                "tga" => ImageMagick.MagickFormat.Tga,
-                "dds" => ImageMagick.MagickFormat.Dds,
-                "pcx" => ImageMagick.MagickFormat.Pcx,
-                "sgi" or "rgb" => ImageMagick.MagickFormat.Sgi,
-                "dpx" => ImageMagick.MagickFormat.Dpx,
-                "exr" => ImageMagick.MagickFormat.Exr,
-                "hdr" => ImageMagick.MagickFormat.Hdr,
-                "cin" => ImageMagick.MagickFormat.Cin,
-                "ico" => ImageMagick.MagickFormat.Ico,
-                "jxl" => ImageMagick.MagickFormat.Jxl,
-                "qoi" => ImageMagick.MagickFormat.Qoi,
-                "ff" => ImageMagick.MagickFormat.Farbfeld,
-                _ => ImageMagick.MagickFormat.Png
-            };
-
-            if (format == ImageMagick.MagickFormat.Icon)
-            {
-                const int maxIconSize = 256;
-                if (image.Width > maxIconSize || image.Height > maxIconSize)
-                {
-                    image.FilterType = ImageMagick.FilterType.Lanczos;
-                    image.Resize(new ImageMagick.MagickGeometry((uint)maxIconSize, (uint)maxIconSize)
-                    {
-                        IgnoreAspectRatio = false
-                    });
-                }
-                image.Format = ImageMagick.MagickFormat.Icon;
-            }
-
-            using var ms = new MemoryStream();
-            image.Format = format;
-            image.Write(ms);
-            return ms.ToArray();
-        });
-    }
-
     private async Task ConvertVideoFile(string ffmpegPath, string inputFile, string outputFile)
     {
-        await VideoService.ConvertAsync(
-            ffmpegPath: ffmpegPath,
-            inputFile: inputFile,
-            outputFile: outputFile,
-            outputFormat: VideoOutputFormat,
-            videoCodec: VideoCodec,
-            crf: VideoCrf,
-            preset: VideoPreset,
-            resolution: VideoResolution,
-            audioBitrate: VideoAudioBitrate,
-            hwAccel: null,
-            fps: string.IsNullOrEmpty(VideoFps) ? null : VideoFps,
-            progress: new Progress<int>(p =>
+        await FfmpegVideoConverterService.ConvertAsync(
+            ffmpegPath, inputFile, outputFile, 0,
+            new Progress<int>(p =>
             {
                 if (Cts?.IsCancellationRequested ?? true) return;
                 CurrentFileProgress = Math.Max(0, Math.Min(100, p));
                 try { InvokeAsync(StateHasChanged); } catch { }
             }),
-            token: Cts!.Token);
-
+            V.ToOptions(), Cts!.Token, V.ToExtra());
         if (!(Cts?.IsCancellationRequested ?? false))
             CleanupTempFile(inputFile);
     }
@@ -2626,6 +2097,28 @@
         }
     }
 
+
+    private static string GetUniqueOutputPath(string path, string inputFile, HashSet<string> used)
+    {
+        var inputFull = Path.GetFullPath(inputFile);
+        bool Taken(string p) => used.Contains(Path.GetFullPath(p)) ||
+                                string.Equals(Path.GetFullPath(p), inputFull, StringComparison.OrdinalIgnoreCase);
+
+        var result = path;
+        if (Taken(result))
+        {
+            var dir = Path.GetDirectoryName(path) ?? "";
+            var name = Path.GetFileNameWithoutExtension(path);
+            var ext = Path.GetExtension(path);
+            for (var n = 1; n < 10000; n++)
+            {
+                result = Path.Combine(dir, $"{name} ({n}){ext}");
+                if (!Taken(result)) break;
+            }
+        }
+        used.Add(Path.GetFullPath(result));
+        return result;
+    }
 
     private void CancelBatchConversion()
     {
@@ -2757,15 +2250,22 @@
     // ===== Уведомления =====
     private async Task ShowNotification(string message, NotificationType type)
     {
-        CurrentNotification = new NotificationMessage
-        {
-            Message = message,
-            Type = type
-        };
-        StateHasChanged();
+        var notification = new NotificationMessage { Message = message, Type = type };
+        CurrentNotification = notification;
+        await InvokeAsync(StateHasChanged);
 
+        // Раньше здесь был await Task.Delay(5000): каждый вызов (в т.ч. итог пакетной конвертации)
+        // задерживал вызывающий код на 5 секунд — и IsConverting/очистка temp срабатывали с опозданием.
+        _ = HideNotificationLaterAsync(notification);
+    }
+
+    private async Task HideNotificationLaterAsync(NotificationMessage notification)
+    {
         await Task.Delay(5000);
-        CurrentNotification = null;
-        StateHasChanged();
+        if (ReferenceEquals(CurrentNotification, notification))
+        {
+            CurrentNotification = null;
+            try { await InvokeAsync(StateHasChanged); } catch { }
+        }
     }
 }

@@ -1,0 +1,149 @@
+@using ConverToDazz.Core.Services
+@using DazzConv.Services
+@inject FFmpegPathService FFmpegPaths
+
+@* ═══════════════════════════════════════════════════════════════════════════════════
+   ОБЩАЯ ФОРМА НАСТРОЕК АУДИО (страница «Аудио» и «Пакетная конвертация»).
+   Форматы, битрейты и частоты берутся из FormatCatalog, значения хранятся в AudioSettings.
+   Рендерит содержимое карточки — карточку создаёт страница.
+   ═══════════════════════════════════════════════════════════════════════════════════ *@
+
+<div class="mb-3">
+    <label class="form-label"><strong>Выходной формат:</strong></label>
+    <select class="form-select @(Large ? "form-select-lg" : "")" value="@Settings.OutputFormat" @onchange="OnFormatChangedAsync">
+        @foreach (var grp in FormatCatalog.AudioFormats.GroupBy(f => f.Group))
+        {
+            <optgroup label="@grp.Key">
+                @foreach (var f in grp)
+                {
+                    var usable = IsUsable(f.Ext);
+                    <option value="@f.Ext" disabled="@(!usable)">@f.Name — @f.Description@(usable ? "" : " (недоступно в вашей сборке ffmpeg)")</option>
+                }
+            </optgroup>
+        }
+    </select>
+    @if (!string.IsNullOrEmpty(Settings.Format.Note))
+    {
+        <div class="form-text">@Settings.Format.Note</div>
+    }
+    @if (Settings.Format.Lossless)
+    {
+        <div class="form-text">Формат без потерь не улучшает исходное качество: если исходный файл был MP3/AAC/OPUS, звук останется таким же, а файл станет больше.</div>
+    }
+</div>
+
+@if (Settings.Format.HasBitrate)
+{
+    var rates = Settings.Format.Bitrates;
+    var idx = Math.Max(0, Array.IndexOf(rates, FormatCatalog.NearestBitrate(Settings.Format, Settings.Bitrate)));
+    <div class="mb-4">
+        <label class="form-label d-block text-center mb-2"><strong>Аудио битрейт: @rates[idx] kbps</strong></label>
+        <div class="bitrate-slider-wrapper">
+            <input type="range" class="custom-bitrate-range" min="0" max="@(rates.Length - 1)" step="1" value="@idx"
+                   @oninput="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var i)) Settings.Bitrate = rates[Math.Clamp(i, 0, rates.Length - 1)]; })" />
+            <div class="slider-ticks"><span>@rates.First()</span><span>@rates.Last()</span></div>
+        </div>
+        @if (Settings.Format.Ext is "ac3" or "amr" or "mp2")
+        {
+            <div class="form-text text-center">У этого формата допустимы только фиксированные значения.</div>
+        }
+    </div>
+}
+
+@if (Settings.Format.SampleRates.Length > 1)
+{
+    <div class="mb-3">
+        <label class="form-label"><strong>Частота дискретизации:</strong></label>
+        <select class="form-select" value="@Settings.SampleRate"
+                @onchange="e => SetAsync(() => { if (int.TryParse(e.Value?.ToString(), out var v)) Settings.SampleRate = v; })">
+            <option value="0">Оригинальная</option>
+            @foreach (var rate in Settings.Format.SampleRates)
+            {
+                <option value="@rate">@FormatRate(rate)</option>
+            }
+        </select>
+    </div>
+}
+
+<div class="mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="@(IdPrefix)Norm" checked="@Settings.Normalize"
+               @onchange="e => SetAsync(() => Settings.Normalize = (bool)(e.Value ?? false))" />
+        <label class="form-check-label" for="@(IdPrefix)Norm">Нормализовать громкость</label>
+    </div>
+    <div class="form-text">Выровнять уровень громкости</div>
+</div>
+
+@if (Settings.Format.MaxChannels > 1)
+{
+    <div class="mb-3">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="@(IdPrefix)Mono" checked="@Settings.Mono"
+                   @onchange="e => SetAsync(() => Settings.Mono = (bool)(e.Value ?? false))" />
+            <label class="form-check-label" for="@(IdPrefix)Mono">Моно (один канал)</label>
+        </div>
+    </div>
+}
+
+<div class="mb-3 border-top pt-3">
+    <h6 class="mb-2">📉 Режим «шакал»</h6>
+    <div class="d-flex flex-wrap gap-2">
+        @foreach (var (level, title, danger) in new[] { (1, "Лёгкий", false), (2, "Средний", false), (3, "Сильный", false), (4, "Ультра", true), (5, "Рация (OPUS)", false) })
+        {
+            var l = level;
+            <button type="button" class="btn btn-sm @(danger ? "btn-outline-danger" : "btn-outline-secondary")"
+                    @onclick="() => ApplyShakalAsync(l)">@title</button>
+        }
+    </div>
+    <div class="form-text">Низкий битрейт, моно и низкая частота — звук «как из старого телефона».</div>
+</div>
+
+@code {
+    [Parameter] public AudioSettings Settings { get; set; } = new();
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<string> OnShakalApplied { get; set; }
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public string IdPrefix { get; set; } = "asf";
+
+    private FfmpegCapabilities? _caps;
+    private HashSet<string> _broken = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _caps = await FfmpegCapabilities.GetAsync(FFmpegPaths.GetFFmpegPath());
+            var last = FfmpegCapabilities.LoadLastResults();
+            if (last != null)
+                _broken = last.Where(r => r.Kind == "audio" && !r.Ok).Select(r => r.Ext).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch { }
+    }
+
+    private bool IsUsable(string ext) => (_caps?.IsAudioFormatUsable(ext) ?? true) && !_broken.Contains(ext);
+
+    private static string FormatRate(int rate) => rate switch
+    {
+        8000 => "8000 Hz (телефон)",
+        22050 => "22050 Hz (радио)",
+        44100 => "44100 Hz (CD)",
+        48000 => "48000 Hz (DVD)",
+        96000 => "96000 Hz (Hi-Res)",
+        _ => $"{rate} Hz"
+    };
+
+    private async Task SetAsync(Action change)
+    {
+        change();
+        await OnChanged.InvokeAsync();
+    }
+
+    private Task OnFormatChangedAsync(ChangeEventArgs e) => SetAsync(() => Settings.SetFormat(e.Value?.ToString() ?? "mp3"));
+
+    private async Task ApplyShakalAsync(int level)
+    {
+        Settings.ApplyShakal(level);
+        await OnChanged.InvokeAsync();
+        await OnShakalApplied.InvokeAsync(Settings.ShakalSummary);
+    }
+}

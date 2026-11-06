@@ -17,7 +17,10 @@
         <!-- Метаданные приложения -->
         <ApplicationTitle>DazzConv</ApplicationTitle>
         <ApplicationId>com.falseoracle.dazzconv</ApplicationId>
-        <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+        <!-- Версия: release.ps1 подставляет её из параметра -Version; здесь — значение по умолчанию.
+             ApplicationVersion — ТОЛЬКО целое число (номер сборки), версия вида 1.2.0 в него не пишется. -->
+        <Version>1.2.0</Version>
+        <ApplicationDisplayVersion>1.2.0</ApplicationDisplayVersion>
         <ApplicationVersion>1</ApplicationVersion>
 
         <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
@@ -35,12 +38,6 @@
         <!-- НЕ ставим WindowsPackageType=None! VS нужен package для отладки -->
         <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
     </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-      <ApplicationDisplayVersion>1.1.0</ApplicationDisplayVersion>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-      <ApplicationDisplayVersion>1.1.0</ApplicationDisplayVersion>
-    </PropertyGroup>
 
     <!-- App resources -->
     <ItemGroup>
@@ -54,8 +51,8 @@
 
     <!-- NuGet packages -->
     <ItemGroup>
-        <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.14.0" />
-        <PackageReference Include="Magick.NET.Core" Version="14.14.0" />
+        <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.17.2" />
+        <PackageReference Include="Magick.NET.Core" Version="14.17.2" />
         <PackageReference Include="Microsoft.AspNetCore.Components" Version="8.0.10" />
         <PackageReference Include="Microsoft.AspNetCore.Components.Forms" Version="8.0.10" />
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.10" />
@@ -80,9 +77,6 @@
     <!-- External tools -->
     <ItemGroup>
         <None Update="Resources\ffmpeg\ffmpeg.exe">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="Resources\ffmpeg\ffplay.exe">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         <None Update="Resources\ffmpeg\ffprobe.exe">

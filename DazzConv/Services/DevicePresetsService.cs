@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DazzConv.Services
@@ -31,13 +31,18 @@ namespace DazzConv.Services
 
     public static class DevicePresets
     {
-        public static List<DevicePreset> GetAll()
+        // Список создаётся один раз (раньше GetAll() пересоздавал все объекты при каждом вызове, в т.ч. из GetByCategory)
+        private static readonly List<DevicePreset> _all = Build();
+
+        public static List<DevicePreset> GetAll() => _all;
+
+        private static List<DevicePreset> Build()
         {
             return new List<DevicePreset>
             {
                 new DevicePreset
                 {
-                    Id = "iphone", Name = "iPhone / iOS", Icon = "", Category = "phone",
+                    Id = "iphone", Name = "iPhone / iOS", Icon = "📱", Category = "phone",
                     VideoCodec = "libx264", VideoFormat = "mp4", Resolution = "1080p",
                     VideoBitrate = 5000, AudioCodec = "aac", AudioBitrate = 192, Fps = "30",
                     Description = "H.264 + AAC, совместимо со всеми iOS устройствами"
@@ -65,7 +70,7 @@ namespace DazzConv.Services
                 },
                 new DevicePreset
                 {
-                    Id = "discord", Name = "Discord", Icon = "", Category = "social",
+                    Id = "discord", Name = "Discord", Icon = "🎮", Category = "social",
                     VideoCodec = "libx264", VideoFormat = "mp4", Resolution = "720p",
                     VideoBitrate = 5000, AudioCodec = "aac", AudioBitrate = 128,
                     Description = "До 8MB для Nitro, до 25MB для Nitro Boost"
@@ -103,7 +108,7 @@ namespace DazzConv.Services
                 },
                 new DevicePreset
                 {
-                    Id = "web_optimized", Name = "Для сайта", Icon = "", Category = "image",
+                    Id = "web_optimized", Name = "Для сайта", Icon = "🌐", Category = "image",
                     ImageFormat = "webp", ImageQuality = 80,
                     Description = "WebP 80% — оптимально для веба"
                 },

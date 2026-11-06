@@ -283,8 +283,8 @@
         {
             try
             {
-                var downloadsVisited = await JSRuntime.InvokeAsync<string>("eval", "localStorage.getItem('visited_downloads')");
-                var batchVisited = await JSRuntime.InvokeAsync<string>("eval", "localStorage.getItem('visited_batch')");
+                var downloadsVisited = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "visited_downloads");
+                var batchVisited = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "visited_batch");
 
                 _downloadsVisited = downloadsVisited == "true";
                 _batchVisited = batchVisited == "true";
@@ -319,7 +319,7 @@
     {
         try
         {
-            await JSRuntime.InvokeVoidAsync("eval", $"localStorage.setItem('visited_{featureName}', 'true')");
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", $"visited_{featureName}", "true");
         }
         catch { }
 
@@ -334,8 +334,8 @@
     {
         try
         {
-            await JSRuntime.InvokeVoidAsync("eval", "localStorage.removeItem('visited_downloads')");
-            await JSRuntime.InvokeVoidAsync("eval", "localStorage.removeItem('visited_batch')");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "visited_downloads");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "visited_batch");
 
             _downloadsVisited = false;
             _batchVisited = false;

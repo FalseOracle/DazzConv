@@ -1,7 +1,9 @@
 ﻿@page "/audio"
+@implements IDisposable
 @using ConverToDazz.Core.Services
 @using ConverToDazz.Core.Models
 @using DazzConv.Services
+@using DazzConv.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @inject AudioConverterService AudioService
 @inject FFmpegPathService FFmpegService
@@ -62,61 +64,8 @@
                         <h3>⬇️</h3>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label"><strong>Выходной формат:</strong></label>
-                        <select class="form-select form-select-lg" value="@OutputFormat" @onchange="OnFormatChanged">
-                            @foreach (var format in Formats)
-                            {
-                                <option value="@format">@format.ToUpper() @(GetFormatDescription(format))</option>
-                            }
-                        </select>
-                        <div class="form-text">@GetFormatHelpText(OutputFormat)</div>
-                    </div>
-
-                    @if (ShowBitrateOptions)
-                    {
-                        <div class="mb-4">
-                            <label class="form-label d-block text-center mb-2">
-                                <strong>Аудио битрейт: @OutputBitrate kbps</strong>
-                            </label>
-
-                            <div class="bitrate-slider-wrapper">
-                                <input type="range"
-                                       class="custom-bitrate-range"
-                                       min="64"
-                                       max="320"
-                                       step="32"
-                                       value="@OutputBitrate"
-                                       @oninput="OnBitrateChanged" />
-
-                                <div class="slider-ticks">
-                                    <span>64</span>
-                                    <span>320</span>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    @if (ShowSampleRateOptions)
-                    {
-                        <div class="mb-3">
-                            <label class="form-label"><strong>Частота дискретизации:</strong></label>
-                            <select class="form-select" @bind="SampleRate">
-                                <option value="0">Оригинальная</option>
-                                <option value="44100">44100 Hz (CD)</option>
-                                <option value="48000">48000 Hz (DVD)</option>
-                                <option value="96000">96000 Hz (Hi-Res)</option>
-                            </select>
-                        </div>
-                    }
-
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" @bind="NormalizeAudio" id="normalizeCheck" />
-                            <label class="form-check-label" for="normalizeCheck">Нормализовать громкость</label>
-                        </div>
-                        <div class="form-text">Выровнять уровень громкости</div>
-                    </div>
+                    <!-- Общая форма настроек (её же использует пакетная конвертация) -->
+                    <AudioSettingsForm Settings="A" Large="true" OnChanged="StateHasChanged" OnShakalApplied="OnShakalApplied" />
                 </div>
             </div>
         </div>
@@ -594,16 +543,16 @@
 
                         <div class="detail-row">
                             <div class="detail-label">
-                                <i class="bi bi-check-circle text-success"></i> Файл существует
+                                <i class="bi bi-check-circle text-success"></i> Файл на диске
                             </div>
                             <div class="detail-value">
                                 @if (!string.IsNullOrEmpty(InputFilePath) && File.Exists(InputFilePath))
                                 {
-                                    <span class="badge bg-success">✅ Да</span>
+                                    <span class="badge bg-success">✅ Найден</span>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-danger">❌ Нет</span>
+                                    <span class="badge bg-danger">❌ Не найден (перемещён или удалён)</span>
                                 }
                             </div>
                         </div>
@@ -1238,6 +1187,14 @@
 </style>
 
 @code {
+    // Раньше подписка на горячие клавиши никогда не снималась: HotkeyService живёт всё время работы приложения,
+    // поэтому каждое открытие страницы добавляло ещё один обработчик (утечка + вызовы в уже закрытые страницы).
+    public void Dispose()
+    {
+        Hotkeys.OnCancelRequested -= HandleCancel;
+        try { Cts?.Cancel(); } catch { }
+    }
+
     // Константы для категорий (избегаем проблем с кавычками в Razor)
     private const string CategoryPopular = "popular";
     private const string CategoryLossless = "lossless";
@@ -1249,10 +1206,15 @@
     private TimeSpan Duration;
     private int Bitrate;
     private string InputFormat = "";
-    private string OutputFormat = "mp3";
-    private int OutputBitrate = 192;
-    private int SampleRate = 0;
-    private bool NormalizeAudio = false;
+    // Все настройки — в общей модели AudioSettings; свойства ниже — мостики для остального кода страницы.
+    private readonly AudioSettings A = new();
+    private string OutputFormat { get => A.OutputFormat; set => A.SetFormat(value); }
+    private int OutputBitrate { get => A.Bitrate; set => A.Bitrate = value; }
+    private int SampleRate { get => A.SampleRate; set => A.SampleRate = value; }
+    private bool NormalizeAudio { get => A.Normalize; set => A.Normalize = value; }
+    private bool Mono { get => A.Mono; set => A.Mono = value; }
+
+    private Task OnShakalApplied(string summary) => ShowToast($"📉 Шакал: {summary}", ToastType.Success);
     private bool IsConverting = false;
     private bool IsConverted = false;
     private int Progress = 0;
@@ -1260,26 +1222,18 @@
     private string? InputFilePath;
     private CancellationTokenSource? Cts;
 
-    private string[] Formats = {
-    "mp3", "aac", "ogg", "opus", "wma", "m4a",
-    "flac", "wav", "alac", "aiff", "ape", "wv", "tta",
-    "ac3", "caf", "amr", "spx", "mp2"
-};
-
     private long OriginalSize;
     private bool _showFileDetailsModal = false;
     private string _activeCategory = CategoryPopular;
     private string _outputFilePath = "";
+    private string _tempOutputPath = "";
     private long _outputFileSize = 0;
 
-    private bool ShowBitrateOptions => OutputFormat is "mp3" or "aac" or "ogg" or "opus" or "wma" or "ac3" or "amr" or "spx" or "mp2";
-    private bool ShowSampleRateOptions => OutputFormat is "wav" or "flac" or "alac" or "aiff" or "ape" or "wv" or "tta" or "caf";
+    private bool ShowBitrateOptions => A.Format.HasBitrate;
 
-    private readonly string[] AllowedAudioExtensions = {
-    "mp3", "wav", "flac", "ogg", "aac", "wma", "m4a", "opus",
-    "ac3", "aiff", "alac", "ape", "amr", "caf", "mp2", "spx", "tta", "wv"
-};
-    private readonly string[] AllowedVideoExtensions = { "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "mpeg", "mpg", "3gp" };
+    // входные форматы = выходные (единый список InputFormats); видео принимается для извлечения звука
+    private readonly string[] AllowedAudioExtensions = InputFormats.Audio;
+    private readonly string[] AllowedVideoExtensions = InputFormats.Video;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -1421,14 +1375,11 @@
     {
         try
         {
-            var result = await FilePicker.Default.PickAsync(new PickOptions
-            {
-                PickerTitle = "Выберите аудио или видео файл"
-            });
+            var result = await FilePicker.Default.PickAsync(InputPickers.AudioOrVideo("Выберите аудио или видео файл"));
 
             if (result == null) return;
 
-            await ResetConverter();
+            ResetFileState();   // раньше ResetConverter() сбрасывал и выбранный формат, и битрейт
 
             InputFilePath = result.FullPath;
             FileName = Path.GetFileName(InputFilePath);
@@ -1533,11 +1484,15 @@
         _outputFilePath = "";
         _outputFileSize = 0;
         ConversionStatus = "Инициализация...";
+        Cts?.Dispose();
         Cts = new CancellationTokenSource();
 
         var ffmpegPath = FFmpegService.GetFFmpegPath();
         var convertedFilePath = Path.Combine(Path.GetTempPath(),
-            Path.GetFileNameWithoutExtension(FileName) + "_converted." + OutputFormat);
+            Path.GetFileNameWithoutExtension(FileName) + "_converted." + A.OutputExt);
+        _tempOutputPath = convertedFilePath;
+        // остаток от прошлого запуска: без -y ffmpeg ждал бы подтверждения перезаписи и «зависал»
+        try { if (File.Exists(convertedFilePath)) File.Delete(convertedFilePath); } catch { }
 
         var progressReporter = new Progress<int>(value =>
         {
@@ -1550,14 +1505,10 @@
         {
             bool isVideo = AllowedVideoExtensions.Contains(InputFormat);
 
-            if (isVideo)
-            {
-                await ExtractAudioFromVideo(ffmpegPath, InputFilePath, convertedFilePath, Duration, progressReporter, Cts.Token);
-            }
-            else
-            {
-                await AudioService.ConvertAsync(ffmpegPath, InputFilePath, convertedFilePath, Duration, progressReporter, Cts.Token);
-            }
+            // Раньше для обычных аудиофайлов битрейт, частота и нормализация вообще не передавались в ffmpeg
+            // (работал только путь «звук из видео»). Теперь оба случая идут через сервис с параметрами.
+            await AudioService.ConvertAsync(ffmpegPath, InputFilePath, convertedFilePath, Duration, progressReporter, Cts.Token,
+                A.ToOptions(stripVideo: isVideo));
 
             if (!File.Exists(convertedFilePath))
                 throw new Exception("Файл не создан");
@@ -1583,16 +1534,21 @@
         }
         finally
         {
-            if (!IsConverted) IsConverting = false;
+            // раньше после успешной конвертации IsConverting оставался true — кнопка «Начать» была заблокирована
+            IsConverting = false;
             StateHasChanged();
         }
     }
 
     private async Task HandleConversionError(string message)
     {
-        if (!string.IsNullOrEmpty(_outputFilePath) && File.Exists(_outputFilePath))
+        // раньше удалялся _outputFilePath, который при ошибке ещё пуст, — недописанный файл оставался в %TEMP%
+        foreach (var leftover in new[] { _outputFilePath, _tempOutputPath })
         {
-            try { File.Delete(_outputFilePath); } catch { }
+            if (!string.IsNullOrEmpty(leftover) && File.Exists(leftover))
+            {
+                try { File.Delete(leftover); } catch { }
+            }
         }
 
         IsConverting = false;
@@ -1602,58 +1558,6 @@
         _outputFilePath = "";
         _outputFileSize = 0;
         await ShowToast($"❌ {message}", ToastType.Error);
-    }
-
-    private async Task ExtractAudioFromVideo(string ffmpegPath, string inputPath, string outputPath,
-        TimeSpan duration, IProgress<int> progress, CancellationToken token)
-    {
-        var psi = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = ffmpegPath,
-            Arguments = $"-y -i \"{inputPath}\" -vn -acodec {GetAudioCodecForFormat(OutputFormat)} -b:a {OutputBitrate}k -progress pipe:1 -nostats \"{outputPath}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = new System.Diagnostics.Process { StartInfo = psi, EnableRaisingEvents = true };
-        process.Start();
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (!process.StandardOutput.EndOfStream && !token.IsCancellationRequested)
-                {
-                    var line = await process.StandardOutput.ReadLineAsync();
-                    if (line == null) break;
-                    if (line.StartsWith("out_time_ms=") && long.TryParse(line.Replace("out_time_ms=", ""), out long ms))
-                    {
-                        if (duration.TotalMilliseconds > 0)
-                        {
-                            int percent = (int)Math.Min(100, Math.Max(0, ms / duration.TotalMilliseconds * 100));
-                            progress.Report(percent);
-                        }
-                    }
-                }
-            }
-            catch { }
-        }, token);
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (!process.StandardError.EndOfStream && !token.IsCancellationRequested)
-                    await process.StandardError.ReadLineAsync();
-            }
-            catch { }
-        }, token);
-
-        await process.WaitForExitAsync(token);
-        if (token.IsCancellationRequested) throw new OperationCanceledException(token);
-        progress.Report(100);
     }
 
     private string GetAudioCodecForFormat(string format) => format switch
@@ -1691,9 +1595,8 @@
         try
         {
             var fileName = Path.GetFileName(_outputFilePath);
-            var fileBytes = await File.ReadAllBytesAsync(_outputFilePath);
-
-            using var stream = new MemoryStream(fileBytes);
+            // поток прямо из файла: раньше весь файл (до гигабайт) читался в память
+            await using var stream = new FileStream(_outputFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
             using var streamRef = new DotNetStreamReference(stream);
 
             await JSRuntime.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
@@ -1777,6 +1680,21 @@
         return $"{bytes} Б";
     }
 
+    private void ResetFileState()
+    {
+        InputFilePath = null;
+        FileName = "";
+        InputFormat = "";
+        IsConverting = false;
+        IsConverted = false;
+        Progress = 0;
+        ConversionStatus = "Готов к работе";
+        _outputFilePath = "";
+        _outputFileSize = 0;
+        OriginalSize = 0;
+        _showFileDetailsModal = false;
+    }
+
     private async Task ResetConverter()
     {
         InputFilePath = null;
@@ -1786,6 +1704,7 @@
         OutputBitrate = 192;
         SampleRate = 0;
         NormalizeAudio = false;
+        Mono = false;
         IsConverting = false;
         IsConverted = false;
         Progress = 0;
@@ -1801,8 +1720,6 @@
         StateHasChanged();
     }
 
-    private void OnFormatChanged(ChangeEventArgs e) { OutputFormat = e.Value?.ToString() ?? "mp3"; StateHasChanged(); }
-    private void OnBitrateChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out int b)) OutputBitrate = b; StateHasChanged(); }
 
     private string GetFormatDescription(string format) => format switch
     {

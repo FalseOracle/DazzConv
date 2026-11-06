@@ -1,8 +1,7 @@
-﻿using ConverToDazz.Core.Models;
+using ConverToDazz.Core.Models;
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -10,6 +9,11 @@ namespace DazzConv.Services
 {
     public class VideoInfoService
     {
+        private static readonly Regex DurationRegex = new(@"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", RegexOptions.Compiled);
+        private static readonly Regex VideoLineRegex = new(@"Stream #\S+.*?Video:\s*(\S+?)[,\s].*", RegexOptions.Compiled);
+        private static readonly Regex ResolutionRegex = new(@"\b(\d{2,5}x\d{2,5})\b", RegexOptions.Compiled);
+        private static readonly Regex FpsRegex = new(@"(\d+(?:\.\d+)?)\s*fps", RegexOptions.Compiled);
+
         private readonly FFmpegPathService _ffmpegService;
 
         public VideoInfoService(FFmpegPathService ffmpegService)
@@ -19,19 +23,20 @@ namespace DazzConv.Services
 
         public async Task<VideoInfo> GetInfoAsync(string filePath)
         {
-            var ffmpegPath = _ffmpegService.GetFFmpegPath();
             var info = new VideoInfo();
 
             try
             {
                 var psi = new ProcessStartInfo
                 {
-                    FileName = ffmpegPath,
-                    Arguments = $"-i \"{filePath}\"",
+                    FileName = _ffmpegService.GetFFmpegPath(),
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
+                psi.ArgumentList.Add("-hide_banner");
+                psi.ArgumentList.Add("-i");
+                psi.ArgumentList.Add(filePath); // ArgumentList — корректно для путей с кавычками
 
                 using var process = new Process { StartInfo = psi };
                 process.Start();
@@ -39,34 +44,38 @@ namespace DazzConv.Services
                 var errorOutput = await process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
 
-                // Парсим длительность
-                var durationMatch = Regex.Match(errorOutput, @"Duration:\s*(\d+):(\d+):(\d+\.\d+)");
-                if (durationMatch.Success)
+                var dm = DurationRegex.Match(errorOutput);
+                if (dm.Success)
                 {
-                    var hours = int.Parse(durationMatch.Groups[1].Value);
-                    var minutes = int.Parse(durationMatch.Groups[2].Value);
-                    var seconds = double.Parse(durationMatch.Groups[3].Value, CultureInfo.InvariantCulture);
-                    var duration = TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
-                    info.Duration = $"{hours:D2}:{minutes:D2}:{(int)seconds:D2}";
-                    info.DurationSeconds = duration.TotalSeconds;
+                    var h = int.Parse(dm.Groups[1].Value);
+                    var m = int.Parse(dm.Groups[2].Value);
+                    var s = double.Parse(dm.Groups[3].Value, CultureInfo.InvariantCulture);
+                    info.Duration = $"{h:D2}:{m:D2}:{(int)s:D2}";
+                    info.DurationSeconds = h * 3600 + m * 60 + s;
                 }
 
-                // Парсим видео поток
-                var codecMatch = Regex.Match(errorOutput, @"Video:\s*(\S+)");
-                if (codecMatch.Success)
-                    info.Codec = codecMatch.Groups[1].Value.TrimEnd(',');
+                // Разрешение/fps ищем только в строке видеопотока, а не по всему выводу
+                // (раньше могло подцепиться что-то из метаданных/обложки)
+                foreach (var line in errorOutput.Split('\n'))
+                {
+                    if (!line.Contains("Video:")) continue;
 
-                var resMatch = Regex.Match(errorOutput, @"(\d{3,5}x\d{3,5})");
-                if (resMatch.Success)
-                    info.Resolution = resMatch.Groups[1].Value;
+                    var cm = VideoLineRegex.Match(line);
+                    if (cm.Success) info.Codec = cm.Groups[1].Value.TrimEnd(',');
 
-                var fpsMatch = Regex.Match(errorOutput, @"(\d+(?:\.\d+)?)\s*fps");
-                if (fpsMatch.Success)
-                    info.Fps = fpsMatch.Groups[1].Value;
+                    // убираем «0x...»-подобные куски вроде (0x31637661)
+                    var cleaned = Regex.Replace(line, @"\(0x[0-9a-fA-F]+\)|0x[0-9a-fA-F]+", "");
+                    var rm = ResolutionRegex.Match(cleaned);
+                    if (rm.Success) info.Resolution = rm.Groups[1].Value;
+
+                    var fm = FpsRegex.Match(line);
+                    if (fm.Success) info.Fps = fm.Groups[1].Value;
+                    break;
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка получения информации: {ex.Message}");
+                Debug.WriteLine($"Ошибка получения информации: {ex.Message}");
             }
 
             return info;

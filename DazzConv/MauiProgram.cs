@@ -10,16 +10,36 @@ namespace DazzConv
     {
         public static MauiApp CreateMauiApp()
         {
+            // Velopack должен стартовать как можно раньше: при установке/обновлении он обрабатывает
+            // служебные аргументы запуска и сразу завершает процесс.
+            VelopackApp.Build().Run();
+
+            // прокси для обновлений (настраивается в «Настройках»): применяем до любых сетевых запросов, в т.ч. Velopack
+            YtDlpToolsService.Instance.ApplyProcessProxy();
+
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
                 .ConfigureLifecycleEvents(events =>
                 {
-                    VelopackApp.Build().Run();
 #if WINDOWS
                     events.AddWindows(windows => windows
                         .OnWindowCreated((window) =>
                         {
+                            // yt-dlp: автообновление (раз в сутки) и запуск сервера PO-токенов — не блокирует запуск окна
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await Task.Delay(5000);
+                                    await YtDlpToolsService.Instance.AutoMaintainAsync();
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Ошибка автообслуживания yt-dlp: {ex.Message}");
+                                }
+                            });
+
                             //фоновая проверка обновлений через 10 секунд после создания окна
                             _ = Task.Run(async () =>
                             {
@@ -40,7 +60,7 @@ namespace DazzConv
                                         {
                                             try
                                             {
-                                                var currentPage = Application.Current?.MainPage;
+                                                var currentPage = Application.Current?.Windows.FirstOrDefault()?.Page;
                                                 if (currentPage != null)
                                                 {
                                                     bool confirm = await currentPage.DisplayAlert(
@@ -94,6 +114,7 @@ namespace DazzConv
             builder.Services.AddSingleton<HotkeyService>();
             builder.Services.AddSingleton<RecentOperationsService>();
             builder.Services.AddSingleton<UpdateService>();
+            builder.Services.AddSingleton(YtDlpToolsService.Instance);
 
 
             return builder.Build();

@@ -1,7 +1,9 @@
 ﻿@page "/settings"
+@using ConverToDazz.Core.Services
 @using DazzConv.Services
 @inject UpdateService UpdateService
 @inject LoggerService Logger
+@inject FFmpegPathService FFmpegService
 
 <PageTitle>Настройки — DazzConv</PageTitle>
 
@@ -208,6 +210,230 @@
                 </a>
                 <small class="text-muted">© 2026 FalseOracle</small>
             </div>
+        </div>
+    </div>
+
+    <!-- Инструменты и обновления: yt-dlp, ffmpeg, deno, PO-провайдер + прокси -->
+    <div class="card modern-card mb-4 fade-in">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h5 class="mb-0">
+                <i class="bi bi-tools me-2 text-primary"></i>Инструменты и обновления
+            </h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            @if (_overview != null)
+            {
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr><th>Компонент</th><th>Установлено</th><th>Доступно</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in _overview)
+                            {
+                                <tr>
+                                    <td>@t.Name</td>
+                                    <td><span class="text-muted small">@(t.Installed ?? "не установлен")</span></td>
+                                    <td><span class="text-muted small">@(t.Latest ?? "—")</span></td>
+                                    <td>
+                                        @if (t.UpdateAvailable)
+                                        {
+                                            <span class="badge bg-warning text-dark">есть обновление</span>
+                                        }
+                                        else if (t.Latest != null)
+                                        {
+                                            <span class="badge bg-success">актуально</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-outline-primary" @onclick="CheckAllToolsAsync" disabled="@_overviewBusy">
+                    <i class="bi bi-search me-1"></i>Проверить обновления
+                </button>
+                <button class="btn btn-primary" @onclick="UpdateAllToolsAsync" disabled="@_overviewBusy">
+                    <i class="bi bi-cloud-arrow-down me-1"></i>Обновить всё
+                </button>
+            </div>
+
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="autoFfmpegSwitch"
+                       checked="@Tools.AutoUpdateFfmpegEnabled"
+                       @onchange="e => Tools.AutoUpdateFfmpegEnabled = (bool)(e.Value ?? false)" />
+                <label class="form-check-label" for="autoFfmpegSwitch">
+                    Автоматически обновлять ffmpeg, deno и поставщика токенов (ffmpeg — раз в 30 дней, файл около 160 МБ)
+                </label>
+            </div>
+
+            @if (_overviewBusy && _toolsProgress > 0)
+            {
+                <div class="progress mb-3" style="height: 8px;"><div class="progress-bar" style="width: @_toolsProgress%"></div></div>
+            }
+            @if (!string.IsNullOrEmpty(_overviewMessage))
+            {
+                <div class="alert @(_overviewError ? "alert-danger" : "alert-info") py-2">@_overviewMessage</div>
+            }
+            @if (_updateReport != null)
+            {
+                <ul class="list-unstyled small mb-3">
+                    @foreach (var line in _updateReport)
+                    {
+                        <li>@line</li>
+                    }
+                </ul>
+            }
+
+            <hr />
+            <h6 class="mb-2"><i class="bi bi-shield-lock me-2"></i>Прокси для обновлений</h6>
+            <div class="form-text mb-2">
+                Через него приложение обращается к GitHub (обновления программы, yt-dlp, ffmpeg и др.). Настройка сохраняется между запусками.
+                Для загрузки видео используется отдельный прокси на странице «Загрузки».
+            </div>
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="updProxySwitch" @bind="_proxyEnabled" />
+                <label class="form-check-label" for="updProxySwitch">Использовать прокси</label>
+            </div>
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" @bind="_proxyAddress" disabled="@(!_proxyEnabled)"
+                       placeholder="127.0.0.1:1080 или socks5://127.0.0.1:1080" />
+                <button class="btn btn-outline-secondary" @onclick="SaveUpdateProxyAsync">Сохранить</button>
+                <button class="btn btn-outline-secondary" @onclick="TestUpdateProxyAsync" disabled="@_overviewBusy">Проверить</button>
+            </div>
+            <button class="btn btn-sm btn-link p-0 mb-2" @onclick="CopyDownloadsProxyAsync">Взять адрес из настроек загрузок</button>
+            @if (!string.IsNullOrEmpty(_proxyMessage))
+            {
+                <div class="alert @(_proxyOk ? "alert-success" : "alert-warning") py-2 mb-0">@_proxyMessage</div>
+            }
+        </div>
+    </div>
+
+    <!-- Проверка форматов: реальная пробная конвертация каждого формата -->
+    <div class="card modern-card mb-4 fade-in">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h5 class="mb-0"><i class="bi bi-patch-check me-2 text-primary"></i>Проверка форматов</h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <p class="text-muted small">
+                Приложение делает крошечный тестовый файл в каждом формате видео и аудио. Если формат не работает с вашей сборкой ffmpeg,
+                он помечается в списках как недоступный — вы не потратите время на конвертацию, которая закончится ошибкой.
+                Стоит запустить после обновления ffmpeg.
+            </p>
+            <button class="btn btn-primary mb-3" @onclick="RunFormatTestAsync" disabled="@_formatTestBusy">
+                <i class="bi bi-play-circle me-1"></i>Проверить форматы
+            </button>
+            @if (!string.IsNullOrEmpty(_formatTestStatus))
+            {
+                <div class="alert @(_formatTestError ? "alert-warning" : "alert-info") py-2">@_formatTestStatus</div>
+            }
+            @if (_formatResults != null && _formatResults.Count > 0)
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var r in _formatResults.OrderBy(x => x.Kind).ThenBy(x => x.Ext))
+                    {
+                        <span class="badge @(r.Ok ? "bg-success" : "bg-danger")" title="@r.Message">
+                            @(r.Kind == "video" ? "🎬" : "🎵") .@r.Ext @(r.Ok ? "✓" : "✗")
+                        </span>
+                    }
+                </div>
+                @if (_formatResults.Any(r => !r.Ok))
+                {
+                    <ul class="small text-muted mt-3 mb-0">
+                        @foreach (var r in _formatResults.Where(x => !x.Ok))
+                        {
+                            <li><strong>.@r.Ext</strong>: @r.Message</li>
+                        }
+                    </ul>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Загрузчик: yt-dlp и PO-токены -->
+    <div class="card modern-card mb-4 fade-in">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h5 class="mb-0">
+                <i class="bi bi-cloud-download me-2 text-primary"></i>Загрузчик (yt-dlp)
+            </h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <div class="info-box">
+                        <div class="info-label"><i class="bi bi-box me-2"></i>Версия yt-dlp</div>
+                        <div class="info-value">
+                            <span class="badge bg-primary-subtle text-primary fs-6">@(_tools?.YtDlpVersion ?? "не найден")</span>
+                            @if (_tools?.YtDlpOld == true)
+                            {
+                                <span class="badge bg-warning text-dark ms-2">старше 90 дней</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(_tools?.LatestVersion))
+                {
+                    <div class="col-md-6">
+                        <div class="info-box success">
+                            <div class="info-label"><i class="bi bi-stars me-2"></i>Последняя версия</div>
+                            <div class="info-value">
+                                <span class="badge bg-success-subtle text-success fs-6">@_tools!.LatestVersion</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="autoToolsSwitch"
+                       checked="@Tools.AutoUpdateEnabled"
+                       @onchange="e => Tools.AutoUpdateEnabled = (bool)(e.Value ?? false)" />
+                <label class="form-check-label" for="autoToolsSwitch">
+                    Автоматически обновлять yt-dlp при запуске (раз в сутки)
+                </label>
+            </div>
+
+            <button class="btn btn-check-update w-100 mb-3" @onclick="UpdateYtDlpAsync" disabled="@_toolsBusy">
+                <i class="bi bi-arrow-repeat me-2"></i>Проверить и обновить yt-dlp
+            </button>
+
+            <div class="info-box mb-3">
+                <div class="info-label"><i class="bi bi-key me-2"></i>Поставщик PO-токенов (YouTube в хорошем качестве)</div>
+                <div class="info-value">
+                    @if (_tools?.PotInstalled == true)
+                    {
+                        <span class="badge bg-success">установлен</span>
+                        <span class="badge @(_tools.PotRunning ? "bg-success" : "bg-secondary") ms-2">@(_tools.PotRunning ? "запущен" : "не запущен")</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning text-dark">не установлен</span>
+                    }
+                </div>
+            </div>
+
+            <button class="btn btn-outline-primary w-100" @onclick="InstallPotAsync" disabled="@_toolsBusy">
+                <i class="bi bi-download me-2"></i>@(_tools?.PotInstalled == true ? "Переустановить / обновить поставщика" : "Скачать и установить поставщика")
+            </button>
+
+            @if (_toolsBusy && _toolsProgress > 0)
+            {
+                <div class="progress mt-3" style="height: 8px;">
+                    <div class="progress-bar" style="width: @_toolsProgress%"></div>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(_toolsMessage))
+            {
+                <div class="alert @(_toolsError ? "alert-danger" : "alert-info") mt-3 mb-0 py-2">@_toolsMessage</div>
+            }
+
+            <p class="small text-muted mt-3 mb-0">
+                Без PO-токена YouTube отдаёт только 360p (формат 18). Файлы скачиваются с GitHub (yt-dlp — с проверкой SHA-256)
+                в <code>@Tools.ToolsDir</code>; поставщик запускается автоматически вместе с загрузкой и закрывается вместе с приложением.
+            </p>
         </div>
     </div>
 
@@ -671,6 +897,8 @@
 </style>
 
 @code {
+    private YtDlpToolsService Tools => YtDlpToolsService.Instance;
+
     private bool _isChecking = false;
     private bool _updateAvailable = false;
     private bool _wasChecked = false;
@@ -678,6 +906,179 @@
     private string? _latestVersion;
     private string? _statusMessage;
     private Velopack.UpdateInfo? _pendingUpdate;
+
+    // ───────── yt-dlp и PO-токены ─────────
+    private YtDlpToolsStatus? _tools;
+    private bool _toolsBusy;
+    private bool _toolsError;
+    private int _toolsProgress;
+    private string? _toolsMessage;
+
+    // ───── обзор инструментов и прокси обновлений ─────
+    private List<YtDlpToolsService.ToolInfo>? _overview;
+    private bool _overviewBusy;
+    private bool _overviewError;
+    private string? _overviewMessage;
+    private List<string>? _updateReport;
+
+    private bool _proxyEnabled;
+    private string _proxyAddress = "127.0.0.1:1080";
+    private string? _proxyMessage;
+    private bool _proxyOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ps = Tools.ProxySettings;
+        _proxyEnabled = ps.Enabled;
+        _proxyAddress = ps.Address;
+
+        await RefreshToolsAsync(checkLatest: false);
+        try { _overview = await Tools.GetOverviewAsync(checkLatest: false); } catch { }
+    }
+
+    // ───── проверка форматов ─────
+    private List<FormatTestResult>? _formatResults = FfmpegCapabilities.LoadLastResults();
+    private bool _formatTestBusy;
+    private bool _formatTestError;
+    private string? _formatTestStatus;
+
+    private async Task RunFormatTestAsync()
+    {
+        _formatTestBusy = true; _formatTestError = false; _formatTestStatus = "Запускаю проверку..."; StateHasChanged();
+        try
+        {
+            var progress = new Progress<string>(m => { _formatTestStatus = m; _ = InvokeAsync(StateHasChanged); });
+            _formatResults = await FfmpegCapabilities.SelfTestAsync(FFmpegService.GetFFmpegPath(), progress);
+            var bad = _formatResults.Count(r => !r.Ok);
+            _formatTestError = bad > 0;
+            _formatTestStatus = bad == 0
+                ? $"Все {_formatResults.Count} форматов работают."
+                : $"Не работают: {bad} из {_formatResults.Count}. Они помечены в списках как недоступные.";
+        }
+        catch (Exception ex)
+        {
+            _formatTestError = true;
+            _formatTestStatus = $"Проверка не удалась: {ex.Message}";
+        }
+        finally { _formatTestBusy = false; StateHasChanged(); }
+    }
+
+    private async Task CheckAllToolsAsync()
+    {
+        _overviewBusy = true; _overviewError = false; _overviewMessage = "Проверяю обновления..."; _updateReport = null;
+        StateHasChanged();
+        try
+        {
+            _overview = await Tools.GetOverviewAsync(checkLatest: true);
+            _overviewMessage = _overview.Any(t => t.UpdateAvailable) ? "Найдены обновления — нажмите «Обновить всё»." : "Все компоненты актуальны.";
+        }
+        catch (Exception ex) { _overviewError = true; _overviewMessage = $"Ошибка проверки: {ex.Message}"; }
+        finally { _overviewBusy = false; StateHasChanged(); }
+    }
+
+    private async Task UpdateAllToolsAsync()
+    {
+        _overviewBusy = true; _overviewError = false; _overviewMessage = "Обновляю..."; _updateReport = null; _toolsProgress = 0;
+        StateHasChanged();
+        try
+        {
+            var status = new Progress<string>(m => { _overviewMessage = m; _ = InvokeAsync(StateHasChanged); });
+            var progress = new Progress<int>(p => { _toolsProgress = p; _ = InvokeAsync(StateHasChanged); });
+            _updateReport = await Tools.UpdateAllAsync(status, progress);
+            _overviewError = _updateReport.Any(l => l.StartsWith("❌"));
+            _overviewMessage = _overviewError ? "Часть компонентов обновить не удалось (см. ниже)." : "Готово.";
+            _overview = await Tools.GetOverviewAsync(checkLatest: true);
+            await RefreshToolsAsync(checkLatest: false);
+        }
+        catch (Exception ex) { _overviewError = true; _overviewMessage = $"Ошибка обновления: {ex.Message}"; }
+        finally { _overviewBusy = false; _toolsProgress = 0; StateHasChanged(); }
+    }
+
+    private void SaveUpdateProxyAsync()
+    {
+        Tools.SetProxySettings(_proxyEnabled, _proxyAddress);
+        UpdateService.ResetManager();
+        _proxyOk = true;
+        _proxyMessage = _proxyEnabled
+            ? "Прокси сохранён и применён к проверке обновлений. Для самой программы он полностью заработает после перезапуска."
+            : "Прокси для обновлений выключен.";
+    }
+
+    private async Task TestUpdateProxyAsync()
+    {
+        SaveUpdateProxyAsync();
+        _overviewBusy = true; _proxyMessage = "Проверяю доступ к GitHub..."; StateHasChanged();
+        var (ok, message) = await Tools.TestProxyAsync();
+        _proxyOk = ok; _proxyMessage = message;
+        _overviewBusy = false;
+    }
+
+    // те же настройки, что на странице «Загрузки» (файл proxy_settings.json)
+    private Task CopyDownloadsProxyAsync()
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DazzConv", "proxy_settings.json");
+            if (File.Exists(path))
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+                if (doc.RootElement.TryGetProperty("ProxyAddress", out var addr) && addr.GetString() is { Length: > 0 } a)
+                {
+                    _proxyAddress = a;
+                    _proxyEnabled = doc.RootElement.TryGetProperty("UseProxy", out var u) && u.GetBoolean();
+                    _proxyOk = true; _proxyMessage = "Адрес взят из настроек загрузок. Нажмите «Сохранить».";
+                    return Task.CompletedTask;
+                }
+            }
+            _proxyOk = false; _proxyMessage = "В настройках загрузок прокси пока не задан.";
+        }
+        catch (Exception ex) { _proxyOk = false; _proxyMessage = $"Не удалось прочитать настройки загрузок: {ex.Message}"; }
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshToolsAsync(bool checkLatest)
+    {
+        try { _tools = await Tools.GetStatusAsync(checkLatest); }
+        catch (Exception ex) { Logger.LogWarning($"Настройки: статус загрузчика: {ex.Message}"); }
+    }
+
+    private async Task RunToolsTaskAsync(Func<Task> action, string successMessage)
+    {
+        _toolsBusy = true; _toolsError = false; _toolsProgress = 0; _toolsMessage = null;
+        StateHasChanged();
+        try
+        {
+            await action();
+            _toolsMessage = successMessage;
+        }
+        catch (Exception ex)
+        {
+            _toolsError = true;
+            _toolsMessage = $"Ошибка: {ex.Message}";
+            Logger.LogError("Настройки: ошибка обновления загрузчика", ex);
+        }
+        finally
+        {
+            _toolsBusy = false;
+            await RefreshToolsAsync(checkLatest: false);
+            StateHasChanged();
+        }
+    }
+
+    private Task UpdateYtDlpAsync() => RunToolsTaskAsync(async () =>
+    {
+        var progress = new Progress<int>(p => { _toolsProgress = p; _toolsMessage = $"Загрузка yt-dlp: {p}%"; _ = InvokeAsync(StateHasChanged); });
+        var version = await Tools.UpdateYtDlpAsync(progress);
+        await RefreshToolsAsync(checkLatest: true);
+        _toolsMessage = $"yt-dlp: {version}";
+    }, "yt-dlp актуален.");
+
+    private Task InstallPotAsync() => RunToolsTaskAsync(async () =>
+    {
+        var status = new Progress<string>(m => { _toolsMessage = m; _ = InvokeAsync(StateHasChanged); });
+        var progress = new Progress<int>(pct => { _toolsProgress = pct; _ = InvokeAsync(StateHasChanged); });
+        await Tools.InstallPotProviderAsync(status, progress);
+    }, "Поставщик токенов установлен и запущен. Можно скачивать с YouTube.");
 
     private async Task CheckForUpdates()
     {
@@ -706,7 +1107,9 @@
             else
             {
                 Logger.LogInfo("Обновлений не найдено");
-                _statusMessage = "Обновлений не найдено. Если вы уверены, что новая версия есть — проверьте, установлено ли приложение через установщик.";
+                _statusMessage = UpdateService.IsInstalled
+                    ? "У вас последняя версия."
+                    : "Приложение запущено не из установщика (Setup.exe) — автообновление работает только в установленной версии.";
             }
         }
         catch (Exception ex)
@@ -731,7 +1134,11 @@
 
         try
         {
-            var success = await UpdateService.DownloadAndInstallAsync(_pendingUpdate);
+            var success = await UpdateService.DownloadAndInstallAsync(_pendingUpdate, percent =>
+            {
+                _statusMessage = $"Загрузка обновления: {percent}%... Приложение перезапустится автоматически.";
+                _ = InvokeAsync(StateHasChanged);
+            });
             if (!success)
             {
                 _isError = true;

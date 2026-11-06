@@ -1,7 +1,9 @@
 ﻿@page "/image"
+@implements IDisposable
 @using ConverToDazz.Core.Services
 @using ConverToDazz.Core.Models
 @using DazzConv.Services
+@using DazzConv.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @inject ImageConverterService ImageService
 @inject IJSRuntime JSRuntime
@@ -52,128 +54,8 @@
                     <h5 class="mb-0">🎨 Настройки конвертации</h5>
                 </div>
                 <div class="card-body">
-                    <!-- Выходной формат -->
-                    <div class="mb-3">
-                        <label class="form-label"><strong>Выходной формат:</strong></label>
-                        <select class="form-select form-select-lg" value="@OutputFormat" @onchange="OnFormatChanged">
-                            @foreach (var format in SupportedOutputFormats)
-                            {
-                                <option value="@format">@format.ToUpper() - @GetFormatName(format)</option>
-                            }
-                        </select>
-
-                        @if (OutputFormat == "ico")
-                        {
-                            <div class="alert alert-info mt-2 mb-0 py-2 small">
-                                <i class="bi bi-info-circle me-1"></i>
-                                <strong>ICO:</strong> Максимум 256×256 px, автоуменьшение.
-                            </div>
-                        }
-                        else if (OutputFormat == "avif" || OutputFormat == "heic" || OutputFormat == "heif")
-                        {
-                            <div class="alert alert-info mt-2 mb-0 py-2 small">
-                                <i class="bi bi-info-circle me-1"></i>
-                                <strong>@OutputFormat.ToUpper():</strong> Лучшее сжатие, но не везде поддерживается.
-                            </div>
-                        }
-                        else if (OutputFormat == "jxl")
-                        {
-                            <div class="alert alert-info mt-2 mb-0 py-2 small">
-                                <i class="bi bi-info-circle me-1"></i>
-                                <strong>JPEG XL:</strong> Преемник JPEG. Lossless + прогрессивная загрузка.
-                            </div>
-                        }
-                        else if (OutputFormat == "gif")
-                        {
-                            <div class="alert alert-warning mt-2 mb-0 py-2 small">
-                                <i class="bi bi-exclamation-triangle me-1"></i>
-                                <strong>GIF:</strong> Только 256 цветов, не для фотографий.
-                            </div>
-                        }
-                        else if (OutputFormat == "exr" || OutputFormat == "hdr" || OutputFormat == "dpx")
-                        {
-                            <div class="alert alert-info mt-2 mb-0 py-2 small">
-                                <i class="bi bi-stars me-1"></i>
-                                <strong>@OutputFormat.ToUpper():</strong> Профессиональный формат для VFX/HDR.
-                            </div>
-                        }
-                        else if (OutputFormat == "dds")
-                        {
-                            <div class="alert alert-info mt-2 mb-0 py-2 small">
-                                <i class="bi bi-gpu-card me-1"></i>
-                                <strong>DDS:</strong> GPU-сжатие для игр (DirectX).
-                            </div>
-                        }
-                        else if (OutputFormat == "psd")
-                        {
-                            <div class="alert alert-warning mt-2 mb-0 py-2 small">
-                                <i class="bi bi-exclamation-triangle me-1"></i>
-                                <strong>PSD:</strong> Только чтение слоёв, запись ограничена.
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Качество -->
-                    @if (ShowQualitySlider)
-                    {
-                        <div class="mb-3">
-                            <label class="form-label">
-                                <strong>Качество: @Quality%</strong>
-                                <span class="text-muted ms-2 small">@GetQualityDescription(Quality)</span>
-                            </label>
-                            <input type="range" class="form-range" min="1" max="100" step="5"
-                                   value="@Quality" @oninput="OnQualityChanged" />
-                            <div class="d-flex justify-content-between small">
-                                <span class="text-muted">Мин. размер</span>
-                                <span class="text-muted">Баланс</span>
-                                <span class="text-muted">Макс. качество</span>
-                            </div>
-                        </div>
-                    }
-
-                    <!-- Изменение размера -->
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" @bind="ResizeEnabled" id="resizeCheck" />
-                            <label class="form-check-label" for="resizeCheck">
-                                <strong>Изменить размер</strong>
-                            </label>
-                        </div>
-
-                        @if (ResizeEnabled)
-                        {
-                            <div class="row mt-2 g-2">
-                                <div class="col-6">
-                                    <label class="form-label small mb-1">Ширина (px)</label>
-                                    <input type="number"
-                                           class="form-control form-control-sm @(IsValidImageSize(NewWidth) ? "" : "is-invalid")"
-                                           @bind="NewWidth" min="1" max="8192" />
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label small mb-1">Высота (px)</label>
-                                    <input type="number"
-                                           class="form-control form-control-sm @(IsValidImageSize(NewHeight) ? "" : "is-invalid")"
-                                           @bind="NewHeight" min="1" max="8192" />
-                                </div>
-                            </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox" @bind="KeepAspectRatio" id="aspectCheck" />
-                                <label class="form-check-label small" for="aspectCheck">
-                                    Сохранить пропорции
-                                </label>
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Оптимизация -->
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" @bind="OptimizeSize" id="optimizeCheck" />
-                            <label class="form-check-label" for="optimizeCheck">
-                                Оптимизировать размер файла
-                            </label>
-                        </div>
-                    </div>
+                    <!-- Общая форма настроек (её же использует пакетная конвертация) -->
+                    <ImageSettingsForm Settings="S" Large="true" InputWidth="ImageWidth" InputHeight="ImageHeight" OnChanged="StateHasChanged" />
 
                     <!-- Кнопки управления -->
                     <div class="d-grid gap-2 mt-4">
@@ -694,16 +576,16 @@
 
                         <div class="detail-row">
                             <div class="detail-label">
-                                <i class="bi bi-check-circle text-success"></i> Файл существует
+                                <i class="bi bi-check-circle text-success"></i> Файл на диске
                             </div>
                             <div class="detail-value">
                                 @if (!string.IsNullOrEmpty(InputFilePath) && File.Exists(InputFilePath))
                                 {
-                                    <span class="badge bg-success">✅ Да</span>
+                                    <span class="badge bg-success">✅ Найден</span>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-danger">❌ Нет</span>
+                                    <span class="badge bg-danger">❌ Не найден (перемещён или удалён)</span>
                                 }
                             </div>
                         </div>
@@ -1186,6 +1068,14 @@
 </style>
 
 @code {
+    // Раньше подписка на горячие клавиши никогда не снималась: HotkeyService живёт всё время работы приложения,
+    // поэтому каждое открытие страницы добавляло ещё один обработчик (утечка + вызовы в уже закрытые страницы).
+    public void Dispose()
+    {
+        Hotkeys.OnCancelRequested -= HandleCancel;
+        try { Cts?.Cancel(); } catch { }
+    }
+
     // 🆕 Константы категорий
     private const string CategoryPopular = "popular";
     private const string CategoryDesign = "design";
@@ -1201,13 +1091,15 @@
     private string InputFormat = "";
     private int ImageWidth;
     private int ImageHeight;
-    private string OutputFormat = "png";
-    private int Quality = 85;
-    private bool ResizeEnabled = false;
-    private int NewWidth;
-    private int NewHeight;
-    private bool KeepAspectRatio = true;
-    private bool OptimizeSize = false;
+    // Все настройки — в общей модели ImageSettings; свойства ниже — мостики для остального кода страницы.
+    private readonly ImageSettings S = new();
+    private string OutputFormat { get => S.OutputFormat; set => S.SetFormat(value); }
+    private int Quality { get => S.Quality; set => S.Quality = value; }
+    private bool ResizeEnabled { get => S.ResizeEnabled; set => S.ResizeEnabled = value; }
+    private int NewWidth { get => S.Width; set => S.Width = value; }
+    private int NewHeight { get => S.Height; set => S.Height = value; }
+    private bool KeepAspectRatio { get => S.KeepAspectRatio; set => S.KeepAspectRatio = value; }
+    private bool OptimizeSize { get => S.OptimizeSize; set => S.OptimizeSize = value; }
     private bool IsConverting = false;
     private bool IsConverted = false;
     private int Progress = 0;
@@ -1221,24 +1113,11 @@
 
     private bool _showFileDetailsModal = false;
 
-    private readonly string[] AllowedExtensions = {
-        "jpg", "jpeg", "png", "gif", "webp", "avif", "heic", "heif",
-        "bmp", "tiff", "tif", "pnm", "pbm", "pgm", "ppm", "psd",
-        "tga", "dds", "pcx", "sgi", "rgb",
-        "dpx", "exr", "hdr", "cin",
-        "ico", "jxl", "qoi", "ff"
-    };
+    // входные форматы = выходные (единый список InputFormats)
+    private readonly string[] AllowedExtensions = InputFormats.Image;
 
-    private readonly string[] SupportedOutputFormats = {
-        // Популярные (6)
-        "jpg", "png", "webp", "avif", "gif", "heic",
-        "tiff", "bmp", "pnm", "psd",
-        "tga", "dds", "pcx", "sgi",
-        "dpx", "exr", "hdr", "cin",
-        "ico", "jxl", "qoi", "ff"
-    };
-
-    private bool ShowQualitySlider => OutputFormat is "jpg" or "jpeg" or "webp" or "avif";
+    private readonly string[] SupportedOutputFormats = FormatCatalog.ImageFormats.Select(f => f.Ext).ToArray();
+    private bool ShowQualitySlider => S.ShowQuality;
     private bool IsValidImageSize(int size) => size >= 1 && size <= 8192;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -1407,11 +1286,7 @@
     {
         try
         {
-            var result = await FilePicker.Default.PickAsync(new PickOptions
-            {
-                PickerTitle = "Выберите изображение",
-                FileTypes = FilePickerFileType.Images
-            });
+            var result = await FilePicker.Default.PickAsync(InputPickers.Image("Выберите изображение"));
 
             if (result == null) return;
 
@@ -1512,9 +1387,10 @@
             var preview = await ImageService.CreatePreviewAsync(filePath, 300);
             PreviewBase64 = Convert.ToBase64String(preview);
 
-            using var img = new ImageMagick.MagickImage(filePath);
-            ImageWidth = (int)img.Width;
-            ImageHeight = (int)img.Height;
+            // только заголовок файла: раньше картинка декодировалась целиком второй раз только ради размеров
+            var magickInfo = new ImageMagick.MagickImageInfo(filePath);
+            ImageWidth = (int)magickInfo.Width;
+            ImageHeight = (int)magickInfo.Height;
             NewWidth = ImageWidth;
             NewHeight = ImageHeight;
 
@@ -1531,8 +1407,6 @@
         }
     }
 
-    private void OnFormatChanged(ChangeEventArgs e) { OutputFormat = e.Value?.ToString() ?? "png"; StateHasChanged(); }
-    private void OnQualityChanged(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out int q)) Quality = q; }
 
     private async Task StartConversion()
     {
@@ -1551,6 +1425,7 @@
         IsConverting = true;
         IsConverted = false;
         Progress = 10;
+        Cts?.Dispose();
         Cts = new CancellationTokenSource();
 
         try
@@ -1558,21 +1433,14 @@
             Progress = 30;
             StateHasChanged();
 
-            var options = new ImageConversionOptions
-            {
-                OutputFormat = OutputFormat,
-                Quality = Quality,
-                ResizeEnabled = ResizeEnabled,
-                Width = ResizeEnabled ? NewWidth : ImageWidth,
-                Height = ResizeEnabled ? NewHeight : ImageHeight,
-                KeepAspectRatio = KeepAspectRatio,
-                OptimizeSize = OptimizeSize
-            };
+            var options = S.ToOptions();
+            if (!ResizeEnabled) { options.Width = ImageWidth; options.Height = ImageHeight; }
 
             Progress = 60;
             StateHasChanged();
 
-            ConvertedData = await ImageService.ConvertAdvancedAsync(InputFilePath, options);
+            // сервис не принимает токен, поэтому WaitAsync хотя бы освобождает UI при отмене (кнопка «Отмена» раньше не делала ничего)
+            ConvertedData = await ImageService.ConvertAdvancedAsync(InputFilePath, options).WaitAsync(Cts.Token);
             ConvertedSize = ConvertedData.Length;
 
             Progress = 100;
@@ -1601,6 +1469,24 @@
 
     private void CancelConversion() => Cts?.Cancel();
 
+    private static string GetUniquePath(string path, string? alsoAvoid = null)
+    {
+        bool Taken(string p) => File.Exists(p) ||
+            (alsoAvoid != null && string.Equals(Path.GetFullPath(p), Path.GetFullPath(alsoAvoid), StringComparison.OrdinalIgnoreCase));
+
+        if (!Taken(path)) return path;
+
+        var dir = Path.GetDirectoryName(path) ?? "";
+        var name = Path.GetFileNameWithoutExtension(path);
+        var ext = Path.GetExtension(path);
+        for (var i = 1; i < 1000; i++)
+        {
+            var candidate = Path.Combine(dir, $"{name} ({i}){ext}");
+            if (!Taken(candidate)) return candidate;
+        }
+        return path;
+    }
+
     private async Task SaveFile()
     {
         if (ConvertedData == null)
@@ -1620,7 +1506,7 @@
 
             var baseName = Path.GetFileNameWithoutExtension(FileName);
             var suggestedName = $"{baseName}_converted.{OutputFormat}";
-            var savePath = Path.Combine(folder, suggestedName);
+            var savePath = GetUniquePath(Path.Combine(folder, suggestedName), InputFilePath);
 
             await File.WriteAllBytesAsync(savePath, ConvertedData);
             SavedFilePath = savePath;
